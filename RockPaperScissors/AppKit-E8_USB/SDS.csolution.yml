@@ -26,9 +26,7 @@ solution:
       variables:
         - Board-Layer: $SolutionDir()$/Board/AppKit-E8_M55_HP/Board_HP-U85.clayer.yml
         - SDSIO-Layer: $SolutionDir()$/sdsio/usb/sdsio_usb.clayer.yml
-        - AI-Layer: $SolutionDir()$/ai_layer/ai_layer.clayer.yml
-        - runtime1-Layer: $SolutionDir()$/ai_layer/engine/stage1_source.clayer.yml
-        - runtime2-Layer: $SolutionDir()$/ai_layer/engine/stage2_source.clayer.yml
+        - AI-Layer: $SolutionDir()$/algorithm/ai_layer/ai_layer.clayer.yml
       target-set:
         - set:
           debugger:

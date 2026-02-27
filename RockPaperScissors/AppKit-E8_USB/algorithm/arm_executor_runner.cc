@@ -77,6 +77,7 @@ using executorch::runtime::TensorInfo;
 #define COLOR_YELLOW             "\033[33m"
 #define COLOR_BLUE               "\033[34m"
 
+#define ENABLE_TIME_PROFILING    1
 
 #define vStream_VideoOut         (&Driver_vStreamVideoOut)
 
@@ -85,62 +86,6 @@ using executorch::runtime::TensorInfo;
 #endif
 
 extern vStreamDriver_t Driver_vStreamVideoOut;
-
-/**
-* Implementation of the et_pal_<funcs>()
-*
-* This functions are hardware adaption type of functions for things like
-* time/logging/memory allocation that could call your RTOS or need to to
-* be implemnted in some way.
-*/
-
-void et_pal_init(void) {
-  // PMU initialization - using alternative approach if CMSIS PMU not available
-#if defined(__ARM_FEATURE_PMU_DWT)
-  // Enable cycle counter using DWT (Data Watchpoint and Trace)
-  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-  DWT->CYCCNT = 0;
-  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-#elif defined(__PMU_PRESENT) 
-  // Use ARM PMU if available
-  ARM_PMU_Enable();
-  DCB->DEMCR |= DCB_DEMCR_TRCENA_Msk; // Trace enable
-  ARM_PMU_CYCCNT_Reset();
-  ARM_PMU_CNTR_Enable(PMU_CNTENSET_CCNTR_ENABLE_Msk);
-#else
-  // Fallback: basic initialization without PMU
-  // Performance timing will not be accurate
-#endif
-}
-
-
-ET_NORETURN void et_pal_abort(void) {
-#if !defined(SEMIHOSTING)
-  __builtin_trap();
-#else
-  _exit(-1);
-#endif
-}
-
-et_timestamp_t et_pal_current_ticks(void) {
-#if defined(__ARM_FEATURE_PMU_DWT)
-  // Use DWT cycle counter if available
-  return DWT->CYCCNT;
-#elif defined(ARM_PMU_Get_CCNTR)
-  // Use ARM PMU if available
-  return ARM_PMU_Get_CCNTR();
-#else
-  // Fallback: return a basic counter (not cycle accurate)
-  static uint32_t tick_counter = 0;
-  return ++tick_counter;
-#endif
-}
-
-et_tick_ratio_t et_pal_ticks_to_ns_multiplier(void) {
-  // Since we don't know the CPU freq for your target and justs cycles in the
-  // FVP for et_pal_current_ticks() we return a conversion ratio of 1
-  return {1, 1};
-}
 
 /* ============================================================================
  * Type Definitions

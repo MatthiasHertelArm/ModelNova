@@ -10,19 +10,13 @@ cbuild-pack:
     - resolved-pack: ARM::CMSIS-Driver@2.10.0
       selected-by-pack:
         - ARM::CMSIS-Driver@^2.10.0
-    - resolved-pack: ARM::CMSIS-NN@7.0.0
-      selected-by-pack:
-        - ARM::CMSIS-NN@^7.0.0
     - resolved-pack: ARM::CMSIS-RTX@5.9.0
       selected-by-pack:
         - ARM::CMSIS-RTX@^5.9.0
-    - resolved-pack: ARM::SDS@2.0.0
-      selected-by-pack:
-        - ARM::SDS@^2.0.0-0
     - resolved-pack: ARM::SDS@2.1.0-rc0
       selected-by-pack:
+        - ARM::SDS@^2.0.0-0
         - ARM::SDS@^2.0.1-0
-        - ARM::SDS@^2.1.0-0
     - resolved-pack: ARM::ethos-u-core-driver@1.25.2
       selected-by-pack:
         - ARM::ethos-u-core-driver@^1.25.2
@@ -33,3 +27,6 @@ cbuild-pack:
     - resolved-pack: Keil::MDK-Middleware@8.1.0
       selected-by-pack:
         - Keil::MDK-Middleware@^8.0.0
+    - resolved-pack: PyTorch::ExecuTorch@1.1.0-rc1-build.9
+      selected-by-pack:
+        - PyTorch::ExecuTorch@1.1.0-rc1-build.9
