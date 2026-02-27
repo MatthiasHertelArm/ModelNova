@@ -42,6 +42,7 @@ project:
         - file: arm_executor_runner.cc
         - file: arm_executor_runner.h
         - file: image_processing_func.c
+        - file: image_processing_func_helium.c
         - file: image_processing_func.h
         - file: sds_data_in_user.c
           for-context:
