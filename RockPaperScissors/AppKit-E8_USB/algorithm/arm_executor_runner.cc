@@ -25,15 +25,6 @@
 #include "profiler.h"
 #include "arm_executor_runner.h"  /* runner_output_label_t, RunnerContext (shared with sds_algorithm_user.cpp) */
 
-// AC6 (armclang) doesn't have unistd.h in bare-metal mode
-// Use stdlib exit() instead of _exit() for AC6
-#if defined(__ARMCC_VERSION)
-  // AC6 bare-metal: use exit() from stdlib.h
-  #define _exit(code) exit(code)
-#else
-  #include <unistd.h>
-#endif
-
 using executorch::aten::ScalarType;
 using executorch::aten::Tensor;
 using executorch::extension::BufferDataLoader;
@@ -596,7 +587,12 @@ Error update_input_tensors(
     /* Use stack allocation instead: */
     std::vector<EValue> input_evalues(num_inputs);
 
+    // get_inputs is deprecated in favor of set_input()/MethodMeta,
+    // but we need the shallow tensor copies to memcpy input data in-place.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     Error err = method.get_inputs(input_evalues.data(), num_inputs);
+#pragma clang diagnostic pop
     ET_CHECK_OK_OR_RETURN_ERROR(err);
 
     for (size_t i = 0; i < num_inputs; i++) {

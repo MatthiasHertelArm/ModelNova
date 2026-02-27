@@ -64,15 +64,6 @@ project:
     - layer: $AI-Layer$
       type:  AI
 
-  # List of miscellaneous tool-specific controls
-  misc:
-  - for-compiler: GCC
-    Link:
-      - -Wl,--whole-archive
-      - $SolutionDir()$/algorithm/ai_layer/engine/lib/libexecutorch_delegate_ethos_u.a
-      - -Wl,--no-whole-archive
-      - -Wl,-u,_printf_float
-
   output:
     type:
       - elf
