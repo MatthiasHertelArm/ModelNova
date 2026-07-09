@@ -47,6 +47,9 @@ extern vStreamDriver_t          Driver_vStreamVideoOut;
 /* Camera frame buffer (RAW8 or RGB565) */
 static uint8_t CAM_Frame[CAMERA_FRAME_SIZE] CAMERA_FRAME_BUF_ATTRIBUTE;
 
+/* Set while a single-shot capture is in flight (pipelined with processing) */
+static uint8_t capture_pending = 0U;
+
 /* Algorithm thread ID */
 osThreadId_t tid_algo = NULL;
 
@@ -110,10 +113,11 @@ void DiscardInputData (void) {
   if (((flags & osFlagsError) == 0U) && // If not an error and
       ((flags & 0x01U)        != 0U)) { // if flag is set
 
-    /* Release video input frame */
+    /* Release video input frame; do not restart capture (e.g. playback mode) */
     if (vStream_VideoIn->ReleaseBlock() != VSTREAM_OK) {
       SDS_PRINTF("Failed to release video input frame\n");
     }
+    capture_pending = 0U;
   }
 }
 
@@ -147,14 +151,20 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
   SEGGER_SYSVIEW_MarkStart(SYSVIEW_MARKER_CAPTURE_IMAGE);
 #endif
 
-  /* Start video capture */
-  if (vStream_VideoIn->Start(VSTREAM_MODE_SINGLE) != VSTREAM_OK) {
-    SDS_PRINTF("Failed to start video capture\n");
-    return -1;
+  /* Start video capture unless one is already in flight (pipelined mode:
+     the capture for this frame was started at the end of the previous call
+     and has been running concurrently with inference and display) */
+  if (capture_pending == 0U) {
+    if (vStream_VideoIn->Start(VSTREAM_MODE_SINGLE) != VSTREAM_OK) {
+      SDS_PRINTF("Failed to start video capture\n");
+      return -1;
+    }
+    capture_pending = 1U;
   }
 
   /* Wait for new video input frame */
   osThreadFlagsWait(0x01U, osFlagsWaitAny, osWaitForever);
+  capture_pending = 0U;
 
     /* Get input video frame buffer */
   inFrame = (uint8_t *)vStream_VideoIn->GetBlock();
@@ -209,6 +219,12 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
   /* Release input frame */
   if (vStream_VideoIn->ReleaseBlock() != VSTREAM_OK) {
     SDS_PRINTF("Failed to release video input frame\n");
+  }
+
+  /* Prime the next capture so the sensor and DMA run concurrently with
+     inference and display of the frame just returned in buf */
+  if (vStream_VideoIn->Start(VSTREAM_MODE_SINGLE) == VSTREAM_OK) {
+    capture_pending = 1U;
   }
 
 #ifdef USE_SEGGER_SYSVIEW

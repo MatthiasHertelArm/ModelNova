@@ -167,8 +167,13 @@ void ResetAlgorithm (void) {
   \param[in]    out_num         maximum bytes available in output buffer
   \return       0 on success; -1 on error
 */
+/* Processed-frame counter (debug/telemetry, e.g. fps measurement) */
+volatile uint32_t algo_frame_count = 0U;
+
 int32_t ExecuteAlgorithm(uint8_t *in_buf, uint32_t in_num,
                          uint8_t *out_buf, uint32_t out_num) {
+
+    algo_frame_count++;
 
 #ifndef SIMULATOR
     vStreamStatus_t v_status;
