@@ -25,7 +25,11 @@
 #define IMAGE_HEIGHT                 MODEL_INPUT_HEIGHT
 #define IMAGE_WIDTH                  MODEL_INPUT_WIDTH
 #define IMAGE_CHANNELS               MODEL_INPUT_CHANNELS
-#define MAX_LABEL_NAME_LENGTH        100
+/* Sized so classification_result_t (label + class_id + confidence) fits the
+   SDS output block (ALGO_DATA_OUT_BLOCK_SIZE = 50): 40 + 2 + pad + 4 = 48.
+   With the previous value of 100 the struct was 108 bytes, the size guard in
+   postprocess() never passed, and every recorded ML_Out record stayed zero. */
+#define MAX_LABEL_NAME_LENGTH        40
 #define OUTPUT_STRING_SIZE           100
 #define MAX_DETECTIONS               10
 
