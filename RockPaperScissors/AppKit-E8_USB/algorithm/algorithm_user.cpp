@@ -23,6 +23,7 @@
 #include <vector>
 #include <utility>
 
+#include "cmsis_os2.h"             /* osThreadFlagsWait for the VideoOut wait */
 #include "config_video.h"          /* DISPLAY_IMAGE_SIZE, DISPLAY_FRAME_BUF_ATTRIBUTE */
 #include "algorithm_config.h"
 #include "algorithm.h"
@@ -252,10 +253,15 @@ int32_t ExecuteAlgorithm(uint8_t *in_buf, uint32_t in_num,
 #endif
 
 #ifndef SIMULATOR
-    /* Wait for previous video output frame to finish */
-    do {
+    /* Wait for previous video output frame to finish. Sleep on the VideoOut
+       event (flag 0x02, set by VideoOut_Event_Callback) instead of busy-
+       polling GetStatus; the timeout re-checks status in case of a missed
+       or stale event. */
+    v_status = vStream_VideoOut->GetStatus();
+    while (v_status.active == 1U) {
+        (void)osThreadFlagsWait(0x02U, osFlagsWaitAny, 5U);
         v_status = vStream_VideoOut->GetStatus();
-    } while (v_status.active == 1U);
+    }
 
     outFrame = (uint8_t *)vStream_VideoOut->GetBlock();
     if (outFrame == NULL) {

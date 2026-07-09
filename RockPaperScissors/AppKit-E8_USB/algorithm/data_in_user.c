@@ -64,7 +64,12 @@ void VideoIn_Event_Callback (uint32_t event) {
 
 /* Video Out Stream Event Callback */
 void VideoOut_Event_Callback (uint32_t event) {
-  (void)event;
+
+  if (event & VSTREAM_EVENT_DATA) {
+    /* Display frame output started; single mode deactivates after this.
+       Wake the algorithm thread instead of letting it busy-poll GetStatus */
+    osThreadFlagsSet(tid_algo, 0x02U);
+  }
 }
 
 /**
