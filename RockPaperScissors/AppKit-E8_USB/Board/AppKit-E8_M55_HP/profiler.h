@@ -11,8 +11,10 @@ extern "C" {
 
 #define CPU_FREQ_HZ   (400000000UL)
 
-/** \brief Enable time profiling logs */
+/** \brief Enable time profiling logs (overridable, e.g. via a -D define) */
+#ifndef ENABLE_TIME_PROFILING
 #define ENABLE_TIME_PROFILING (0)
+#endif
 
 /**
  * \brief Initialize cycle counter for profiling
