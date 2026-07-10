@@ -4,7 +4,9 @@ layer:
   description: Common Inference library
   add-path:
     - ./include
+    - ./..
   groups:
-    - group: CIL Libraries
+    - group: CIL Sources
       files:
-        - file: ./src/cil.a
+        - file: ./src/cil_preprocess.c
+        - file: ./src/cil_postprocess.c
