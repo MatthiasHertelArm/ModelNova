@@ -23,6 +23,8 @@
 #include "arm_memory_allocator.h"
 #include "arm_executor_runner.h"  /* detection_result_t, RunnerContext (shared with sds_algorithm_user.cpp) */
 #include "cil.h"
+#include "sds.h"       /* SDS_STATE_ACTIVE */
+#include "sds_main.h"  /* sds_state - per-frame result print gating */
 #include "model_config.h"
 
 #ifndef  SIMULATOR
@@ -895,11 +897,17 @@ void print_outputs(RunnerContext& ctx)
                              sizeof(output_label.label_name));
         }
 
-        printf("\nPost-processed output:\n");
-        printf("Predicted class : %s\n",
-               classify_object ? predicted_label : UNKNOWN_LABEL);
-        printf("Confidence      : %.2f %%\n",
-               confidence_percent);
+        /* Per-frame result print only while SDS recording/playback is
+           active (as documented in the README). The blocking UART write
+           costs ~10-16 ms per frame at 115200 baud and otherwise runs
+           inside every frame with nobody reading it. */
+        if (sds_state == SDS_STATE_ACTIVE) {
+            printf("\nPost-processed output:\n");
+            printf("Predicted class : %s\n",
+                   classify_object ? predicted_label : UNKNOWN_LABEL);
+            printf("Confidence      : %.2f %%\n",
+                   confidence_percent);
+        }
     }
 }
 
