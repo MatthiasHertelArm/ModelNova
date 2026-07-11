@@ -168,7 +168,12 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
   }
 
   /* Wait for new video input frame */
-  osThreadFlagsWait(0x01U, osFlagsWaitAny, osWaitForever);
+  {
+    extern volatile uint32_t cam_wait_ms_total;   /* wait-budget telemetry */
+    uint32_t t0 = osKernelGetTickCount();
+    osThreadFlagsWait(0x01U, osFlagsWaitAny, osWaitForever);
+    cam_wait_ms_total += osKernelGetTickCount() - t0;
+  }
   capture_pending = 0U;
 
     /* Get input video frame buffer */

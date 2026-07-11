@@ -171,6 +171,11 @@ void ResetAlgorithm (void) {
 /* Processed-frame counter (debug/telemetry, e.g. fps measurement) */
 volatile uint32_t algo_frame_count = 0U;
 
+/* Wait-budget telemetry: total ms spent waiting for a camera frame and for
+   the previous display frame, across all frames (read via debugger) */
+volatile uint32_t cam_wait_ms_total  = 0U;
+volatile uint32_t disp_wait_ms_total = 0U;
+
 int32_t ExecuteAlgorithm(uint8_t *in_buf, uint32_t in_num,
                          uint8_t *out_buf, uint32_t out_num) {
 
@@ -257,10 +262,14 @@ int32_t ExecuteAlgorithm(uint8_t *in_buf, uint32_t in_num,
        event (flag 0x02, set by VideoOut_Event_Callback) instead of busy-
        polling GetStatus; the timeout re-checks status in case of a missed
        or stale event. */
-    v_status = vStream_VideoOut->GetStatus();
-    while (v_status.active == 1U) {
-        (void)osThreadFlagsWait(0x02U, osFlagsWaitAny, 5U);
+    {
+        uint32_t t0 = osKernelGetTickCount();   /* wait-budget telemetry */
         v_status = vStream_VideoOut->GetStatus();
+        while (v_status.active == 1U) {
+            (void)osThreadFlagsWait(0x02U, osFlagsWaitAny, 5U);
+            v_status = vStream_VideoOut->GetStatus();
+        }
+        disp_wait_ms_total += osKernelGetTickCount() - t0;
     }
 
     outFrame = (uint8_t *)vStream_VideoOut->GetBlock();
