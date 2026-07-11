@@ -52,7 +52,10 @@ layer:
 
     - component: BSP:Board Config
     - component: BSP:AppKit Config&AppKit-E8-AIML
-    - component: BSP:External peripherals:CAMERA Sensor MT9M114
+    # BSP:External peripherals:CAMERA Sensor MT9M114 replaced by the local
+    # override below: idempotent sensor stream start (the sensor keeps
+    # streaming between single-shot CPI captures, removing the per-frame
+    # I2C system-state transition and exposure restart)
     - component: BSP:External peripherals:Ethernet PHY
     - component: BSP:External peripherals:ILI9806E LCD panel
 
@@ -119,3 +122,10 @@ layer:
         - file: vio_AppKit-E8-AIML.c
         - file: vstream_video_in.c
         - file: vstream_video_out.c
+
+    # Local override of BSP:External peripherals:CAMERA Sensor MT9M114
+    # (see comment at the removed component above)
+    - group: CameraSensor MT9M114 Override
+      files:
+        - file: MT9M114_Camera_Sensor.c
+        - file: mt9m114_isp_param.c
