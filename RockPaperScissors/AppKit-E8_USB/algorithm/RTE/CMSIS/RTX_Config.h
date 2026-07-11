@@ -131,7 +131,7 @@
 //   <i> RTOS Functions called from ISR store requests to this buffer.
 //   <i> Default: 16 entries
 #ifndef OS_ISR_FIFO_QUEUE
-#define OS_ISR_FIFO_QUEUE           16
+#define OS_ISR_FIFO_QUEUE           64
 #endif
  
 //   <q>Object Memory usage counters

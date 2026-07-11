@@ -174,6 +174,12 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
     /* Get input video frame buffer */
   inFrame = (uint8_t *)vStream_VideoIn->GetBlock();
   if (inFrame == NULL) {
+    /* Ring wedged with the app owning the block (e.g. a startup race left a
+       GetBlock without its ReleaseBlock): release and take the next frame */
+    (void)vStream_VideoIn->ReleaseBlock();
+    inFrame = (uint8_t *)vStream_VideoIn->GetBlock();
+  }
+  if (inFrame == NULL) {
     SDS_PRINTF("Failed to get video input frame\n");
     return -1;
   }
