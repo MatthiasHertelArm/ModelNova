@@ -110,6 +110,48 @@ T quantize_val(
   return static_cast<T>(qvalue);
 }
 
+#if defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE & 2)
+
+#include <arm_mve.h>
+
+// Helium (M-profile MVE) fast path for float -> int8/uint8 per-tensor
+// quantization. Numerically identical to the scalar quantize_val():
+// vcvtnq_s32_f32 rounds to nearest-even, matching std::nearbyint in the
+// default FP rounding mode, and the add/clamp order is the same.
+template <typename T>
+static void quantize_arm_mve(
+    const float* __restrict in,
+    T* __restrict out,
+    size_t numel,
+    float inv_scale,
+    int32_t zero_point,
+    int32_t quant_min,
+    int32_t quant_max) {
+  const int32x4_t vmin = vdupq_n_s32(quant_min);
+  const int32x4_t vmax = vdupq_n_s32(quant_max);
+  size_t i = 0;
+  for (; i + 4 <= numel; i += 4) {
+    float32x4_t v = vldrwq_f32(&in[i]);
+    v = vmulq_n_f32(v, inv_scale);
+    int32x4_t q = vcvtnq_s32_f32(v);
+    q = vaddq_n_s32(q, zero_point);
+    q = vmaxq_s32(q, vmin);
+    q = vminq_s32(q, vmax);
+    if (sizeof(T) == 1) {
+      vstrbq_s32(reinterpret_cast<int8_t*>(&out[i]), q);
+    }
+  }
+  for (; i < numel; i++) {
+    float v = in[i] * inv_scale;
+    int32_t q = static_cast<int32_t>(nearbyintf(v)) + zero_point;
+    q = std::max(q, quant_min);
+    q = std::min(q, quant_max);
+    out[i] = static_cast<T>(q);
+  }
+}
+
+#endif // MVE float
+
 #if defined(__aarch64__) || defined(__ARM_NEON__)
 
 // Traits for type-specific NEON operations
@@ -261,6 +303,33 @@ Tensor& quantize_per_tensor_out(
       "Failed to resize out Tensor in quantize_per_tensor_out");
 
   check_quantize_per_tensor_args(input, quant_min, quant_max, dtype, out);
+
+  // Try Helium (MVE) optimized path for float->int8/uint8 quantization
+#if defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE & 2)
+  if (input.scalar_type() == ScalarType::Float) {
+    if (dtype == ScalarType::Byte) {
+      quantize_arm_mve<uint8_t>(
+          input.const_data_ptr<float>(),
+          out.mutable_data_ptr<uint8_t>(),
+          input.numel(),
+          1.0f / static_cast<float>(scale),
+          static_cast<int32_t>(zero_point),
+          static_cast<int32_t>(quant_min),
+          static_cast<int32_t>(quant_max));
+      return out;
+    } else if (dtype == ScalarType::Char) {
+      quantize_arm_mve<int8_t>(
+          input.const_data_ptr<float>(),
+          out.mutable_data_ptr<int8_t>(),
+          input.numel(),
+          1.0f / static_cast<float>(scale),
+          static_cast<int32_t>(zero_point),
+          static_cast<int32_t>(quant_min),
+          static_cast<int32_t>(quant_max));
+      return out;
+    }
+  }
+#endif
 
   // Try ARM NEON optimized path for float->int8/uint8 quantization
 #if defined(__aarch64__) || defined(__ARM_NEON__)
