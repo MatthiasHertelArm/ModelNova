@@ -47,7 +47,7 @@
 //     <1=> enable
 // <i> Defines CPI ISP port
 // <i> Default: ISP port disable
-#define RTE_CPI_ISP_PORT                                      1
+#define RTE_CPI_ISP_PORT                                      0
 
 // <o> CPI Row roundup
 //     <0=> disable
@@ -451,6 +451,23 @@
 // <i> default: false
 #define RTE_ISP_BINNING_MODULE 1
 
+// <o> ISP Binning Enable
+//     <0=> disable
+//     <1=> enable
+// <i> Enable binning processing in ISP
+// <i> default: false
+#define RTE_ISP_BINNING_ENABLE 0
+
+// <o> ISP Binning Horizontal Step <0-255>
+// <i> Horizontal binning step size
+// <i> default: 0
+#define RTE_ISP_BINNING_HSTEP 0
+
+// <o> ISP Binning Vertical Step <0-255>
+// <i> Vertical binning step size
+// <i> default: 0
+#define RTE_ISP_BINNING_VSTEP 0
+
 // <o> ISP Enable Scaling Module
 //     <0=> disable
 //     <1=> enable
@@ -466,7 +483,7 @@
 //    <4=> Logs all debug messages.
 //    <5=> Log level verbose
 // <i> Defines ISP logging level
-#define RTE_ISP_LOG_LEVEL 5
+#define RTE_ISP_LOG_LEVEL 1
 
 // <o> ISP Buffer Count <2-8>
 // <i> Number of video buffers for ISP
@@ -488,11 +505,11 @@
 //    <41=> RAW422SP (RAW422 semi-planar)
 // <i> Defines ISP output pixel format for memory dump
 // <i> Default: RGB888
-#define RTE_ISP_OUTPUT_FORMAT 32
+#define RTE_ISP_OUTPUT_FORMAT 38
 
 // <o> ISP Scaler Output Width
 // <i> Width in pixels of the ISP scaler output (after scaling from sensor dimensions).
-#define RTE_ISP_OUTPUT_WIDTH        480
+#define RTE_ISP_OUTPUT_WIDTH        640
 
 // <o> ISP Scaler Output Height
 // <i> Height in pixels of the ISP scaler output (after scaling from sensor dimensions).
@@ -500,13 +517,13 @@
 
 // <o> ISP Sensor Input Width
 // <i> Width in pixels of the sensor input to the ISP pipeline.
-// <i> Default: MT9M114 sensor resolution (1280). Change for different sensors.
-#define RTE_ISP_SENSOR_INPUT_WIDTH  RTE_MT9M114_CAMERA_SENSOR_FRAME_WIDTH
+// <i> OV5675 sensor resolution (derived from IMAGE_CONFIG). Change for different sensors.
+#define RTE_ISP_SENSOR_INPUT_WIDTH  RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH
 
 // <o> ISP Sensor Input Height
 // <i> Height in pixels of the sensor input to the ISP pipeline.
-// <i> Default: MT9M114 sensor resolution (720). Change for different sensors.
-#define RTE_ISP_SENSOR_INPUT_HEIGHT RTE_MT9M114_CAMERA_SENSOR_FRAME_HEIGHT
+// <i> OV5675 sensor resolution (derived from IMAGE_CONFIG). Change for different sensors.
+#define RTE_ISP_SENSOR_INPUT_HEIGHT RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT
 
 // <o> ISP Crop Top offset <0-4095>
 // <i> Top offset in pixels for the cropped output window
@@ -980,7 +997,7 @@
 //     <1=> enable
 // <i> define if to enable or disable MT9M114 MIPI camera sensor
 // <i> default: enable
-#define RTE_MT9M114_CAMERA_SENSOR_MIPI_ENABLE 1
+#define RTE_MT9M114_CAMERA_SENSOR_MIPI_ENABLE 0
 
 #if (RTE_MT9M114_CAMERA_SENSOR_MIPI_ENABLE)
 
@@ -1238,15 +1255,39 @@
 // <i> default: 2  (IPI-16 RAW 8)
 #define RTE_OV5675_CAMERA_SENSOR_CPI_COLOR_MODE          2
 
-// <o> select OV5675 frame height
-// <i> defines select OV5675 frame height.
-// <i> default: 972
-#define RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT            972
+// <o> Select OV5675 image configuration
+//     <0=>   1296x972 (2x2 binned)
+//     <1=>   1920x1080 (cropped, no binning)
+//     <2=>   1280x720 (2x2 binned)
+//     <3=>   640x480 (VGA, 4x4 binned)
+// <i> Default: 0
+// <i> 0 is the configuration verified with the ISP; the ISP scaler
+// <i> downscales 1296x972 to the 640x480 output (same 4:3 aspect).
+#define RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG            3
 
-// <o> select OV5675 frame width
-// <i> defines select OV5675 frame width.
-// <i> default: 1296
+// <i> OV5675 frame height (derived from IMAGE_CONFIG)
+// <i> defines OV5675 frame height.
+#if   (RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG == 1)
+#define RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT            1080
+#elif (RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG == 2)
+#define RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT            720
+#elif (RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG == 3)
+#define RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT            480
+#else
+#define RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT            972
+#endif
+
+// <i> OV5675 frame width (derived from IMAGE_CONFIG)
+// <i> defines OV5675 frame width.
+#if   (RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG == 1)
+#define RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH             1920
+#elif (RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG == 2)
+#define RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH             1280
+#elif (RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG == 3)
+#define RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH             640
+#else
 #define RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH             1296
+#endif
 
 // <o RTE_OV5675_CAMERA_SENSOR_I2C_INSTANCE> Select camera sensor OV5675 i2c instance
 // <i> Defines camera sensor OV5675 i2c instance

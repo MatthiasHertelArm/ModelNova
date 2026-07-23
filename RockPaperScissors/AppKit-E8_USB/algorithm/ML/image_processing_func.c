@@ -354,6 +354,39 @@ void crop_resize_rgb565_to_rgb888(
     }
 }
 
+void crop_resize_rgb888_to_rgb888(
+    const uint8_t *src,
+    int src_width,
+    int src_height,
+    uint8_t *dst,
+    int dst_width,
+    int dst_height)
+{
+    int crop_size = src_height;                 // 480 for 640x480
+    int crop_x = (src_width - crop_size) / 2;   // center horizontally
+    int crop_y = 0;
+
+    int x_ratio = ((crop_size - 1) << FP_SHIFT) / (dst_width - 1);
+    int y_ratio = ((crop_size - 1) << FP_SHIFT) / (dst_height - 1);
+
+    for (int y = 0; y < dst_height; y++) {
+        int src_y_fp = y * y_ratio;
+        int sy = (src_y_fp >> FP_SHIFT) + crop_y;
+
+        for (int x = 0; x < dst_width; x++) {
+            int src_x_fp = x * x_ratio;
+            int sx = (src_x_fp >> FP_SHIFT) + crop_x;
+
+            const uint8_t *src_pixel = &src[(sy * src_width + sx) * 3];
+            uint8_t *dst_pixel = &dst[(y * dst_width + x) * 3];
+
+            dst_pixel[0] = src_pixel[0];
+            dst_pixel[1] = src_pixel[1];
+            dst_pixel[2] = src_pixel[2];
+        }
+    }
+}
+
 __WEAK void image_resize(const uint8_t *src,
                          int src_width,
                          int src_height,

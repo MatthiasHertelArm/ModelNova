@@ -23,7 +23,22 @@
 #include CMSIS_device_header
 
 #include "cmsis_vstream.h"
+#include "RTE_Device.h"
 #include "Driver_CPI.h"
+
+#if defined(RTE_ISP) && (RTE_ISP == 1)
+/* ISP capture path (e.g. OV5675 raw sensor): the CPI feeds the sensor stream
+ * into the ISP; the processed frames are written to memory by the ISP memory
+ * interface (MI) into buffers queued with ISP_CONTROL_QBUF. Completion is
+ * signalled by ARM_ISP_MI_EVENT_MP_FRAME_END_DETECTED, not by the CPI
+ * capture-stopped event, and VSI_ISP_IrqProcessFrameEnd must run once per
+ * captured frame (ISP_PROCESS_FRAME_END) before the next capture starts. */
+#include "Driver_ISP.h"
+#include "vsi_comm_video.h"
+#include "sys_utils.h" /* LocalToGlobal() */
+
+#define VIDEO_IN_ISP_BUF_MAX 4U
+#endif
 
 /* Handle Flags Definitions */
 #define FLAGS_INIT      (1U << 0)
@@ -61,6 +76,12 @@ typedef struct {
 /* vStream Handle */
 static StreamHandle_t hVideoIn = {0};
 
+#if defined(RTE_ISP) && (RTE_ISP == 1)
+/* ISP output buffer descriptors, one per stream block (queued in SetBuf) */
+static VIDEO_BUF_S      ISPBuf[VIDEO_IN_ISP_BUF_MAX];
+static volatile uint8_t ISPFrameEndPending = 0U;
+#endif
+
 /* Low Level Driver Callback */
 static void DriverCPI_Callback(uint32_t cb_event)
 {
@@ -69,6 +90,34 @@ static void DriverCPI_Callback(uint32_t cb_event)
 
     event = 0U;
 
+#if defined(RTE_ISP) && (RTE_ISP == 1) && (RTE_CPI_ISP_PORT == 1)
+    if (cb_event & ARM_ISP_MI_EVENT_MP_FRAME_END_DETECTED) {
+        /* ISP memory interface finished writing a processed frame */
+        hVideoIn.active    = 0U;
+
+        /* Frame-end processing (AE update, buffer recycle) is deferred to
+           thread context; it runs before the next capture is started */
+        ISPFrameEndPending = 1U;
+
+        event             |= VSTREAM_EVENT_DATA;
+
+        /* Clear buffer empty flag */
+        hVideoIn.flags    &= ~FLAGS_BUF_EMPTY;
+
+        /* Increment index of the block to be streamed */
+        hVideoIn.idx_in    = (hVideoIn.idx_in + 1U) % hVideoIn.buf.block_num;
+
+        if (hVideoIn.idx_in == hVideoIn.idx_rel) {
+            /* Buffer is full */
+            hVideoIn.flags |= FLAGS_BUF_FULL;
+        }
+    }
+
+    if (cb_event & ARM_CPI_EVENT_CAMERA_CAPTURE_STOPPED) {
+        /* CPI input capture finished; frame completion is signalled by the
+           ISP MI frame-end event above */
+    }
+#else
     if (cb_event & ARM_CPI_EVENT_CAMERA_CAPTURE_STOPPED) {
         /* Stopped capturing frame */
         hVideoIn.active  = 0U;
@@ -86,6 +135,7 @@ static void DriverCPI_Callback(uint32_t cb_event)
             hVideoIn.flags |= FLAGS_BUF_FULL;
         }
     }
+#endif
 
     if (cb_event & ARM_CPI_EVENT_CAMERA_FRAME_VSYNC_DETECTED) {
         /* Start of frame */
@@ -243,6 +293,34 @@ static int32_t SetBuf(void *buf, uint32_t buf_size, uint32_t block_size)
         hVideoIn.idx_rel         = 0U;
 
         rval                     = VSTREAM_OK;
+
+#if defined(RTE_ISP) && (RTE_ISP == 1)
+        /* Queue each stream block as an ISP output buffer; the ISP channel
+           cannot be enabled (capture start fails with VSI_ERR_NOBUF) until
+           at least one buffer is queued. Blocks must be in globally
+           addressable memory (SRAM), not in a core-local TCM alias. */
+        {
+            uint32_t i;
+            uint32_t num = hVideoIn.buf.block_num;
+
+            if (num > VIDEO_IN_ISP_BUF_MAX) {
+                num = VIDEO_IN_ISP_BUF_MAX;
+            }
+            for (i = 0U; i < num; i++) {
+                memset(&ISPBuf[i], 0, sizeof(ISPBuf[i]));
+                ISPBuf[i].index                = i;
+                ISPBuf[i].numPlanes            = 1U;
+                ISPBuf[i].imageSize            = hVideoIn.buf.block_size;
+                ISPBuf[i].planes[0].dmaPhyAddr =
+                    (vsi_dma_t)LocalToGlobal(&hVideoIn.buf.data[i * hVideoIn.buf.block_size]);
+
+                if (DriverCPI->Control(ISP_CONTROL_QBUF, (uint32_t)&ISPBuf[i]) != ARM_DRIVER_OK) {
+                    rval = VSTREAM_ERROR;
+                    break;
+                }
+            }
+        }
+#endif
     }
 
     return rval;
@@ -269,6 +347,15 @@ static int32_t Start(uint32_t mode)
         rval = VSTREAM_OK;
     } else {
         rval             = VSTREAM_OK;
+
+#if defined(RTE_ISP) && (RTE_ISP == 1) && (RTE_CPI_ISP_PORT == 1)
+        /* Run the ISP frame-end processing (AE update, MI buffer recycle) for
+           the previously captured frame before starting the next capture */
+        if (ISPFrameEndPending != 0U) {
+            ISPFrameEndPending = 0U;
+            (void)DriverCPI->Control(ISP_PROCESS_FRAME_END, 0U);
+        }
+#endif
 
         /* Set active status */
         hVideoIn.active  = 1U;

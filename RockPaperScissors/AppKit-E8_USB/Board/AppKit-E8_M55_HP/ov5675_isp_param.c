@@ -9,13 +9,23 @@
  */
 
 /*******************************************************************************
- * @file     mt9m114_isp_param.c
- * @brief    ISP calibration and pipeline settings for the MT9M114 sensor.
- *           This file is compiled when the MT9M114 camera sensor component
- *           is selected in the RTE configuration.
+ * @file     ov5675_isp_param.c
+ * @brief    ISP calibration and pipeline settings for the OV5675 sensor.
  *
- *           Parameters are not yet sensor-calibrated. Update calibration_data,
- *           port_attr, and chan_attr with sensor-specific tuned values.
+ *           Local override of the Ensemble 2.2.0 pack file with the color
+ *           fixes from alif_ensemble-cmsis-dfp PR #63 back-ported onto the
+ *           2.2.0 static-configuration ISP driver:
+ *             - auto white balance disabled, manual CCM instead
+ *             - AE/AWB statistics windows follow the sensor frame size
+ *             - AE exposure time capped at 16 ms (keeps frame rate up)
+ *           The input pixel format is kept at the pack default (GRBG8); the
+ *           PR #63 change to GBRG10 belongs to the reworked driver in that
+ *           PR and stalls the 2.2.0 ISP pipeline.
+ *
+ *           NOTE: this file is only compiled when the ISP is enabled
+ *           (RTE_ISP). The example currently captures RAW8 Bayer directly
+ *           with the CPI because the CSI->ISP->CPI routing wedges after the
+ *           first frame on the 2.2.0 pack (see Board_HP-U85.clayer.yml).
  ******************************************************************************/
 
 #include "RTE_Components.h"
@@ -26,9 +36,8 @@
 #include "isp_param.h"
 
 /* ---------------------------------------------------------------------------
- * ISP Calibration Data - MT9M114
- * ---------------------------------------------------------------------------
- */
+ * ISP Calibration Data - OV5675
+ * --------------------------------------------------------------------------- */
 ISP_CALIB_DATA_S calibration_data = {
     .modules = {
         .autoRoute = {
@@ -71,8 +80,8 @@ ISP_CALIB_DATA_S calibration_data = {
             .blockWin = {
                 .hOffs = 0,
                 .vOffs = 0,
-                .hSize = 1280,
-                .vSize = 720,
+                .hSize = RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH,
+                .vSize = RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT,
             },
         },
 #endif /* RTE_ISP_EXPM_MODULE */
@@ -81,22 +90,22 @@ ISP_CALIB_DATA_S calibration_data = {
         .ae = {
             .opType = OP_TYPE_AUTO,
             .manualAttr = {
-                .intTime = 10000,
-                .again = 3072,
+                .intTime = 33000,
+                .again = 8 * 1024,
                 .dgain = 1024,
             },
             .autoAttr = {
                 .expTimeRange = {
                     .min =  100,
-                    .max =  300000,
+                    .max =  16000,
                 },
                 .againRange = {
-                    .min = 3 * 1024,
-                    .max = 1056 * 1024,
+                    .min = 1 * 1024,
+                    .max = 15 * 1024,
                 },
                 .dgainRange = {
-                    .min = 1024,
-                    .max = 1024,
+                    .min = 1 * 1024,
+                    .max = 1 * 1024,
                 },
                 .aeRunInterval = 6,
                 .aeTarget = 100,
@@ -108,7 +117,7 @@ ISP_CALIB_DATA_S calibration_data = {
                     .flickerFreq = 100,
                 },
                 .aeMode = AE_MODE_FIX_FRAME_RATE,
-                .gainThreshold = 1024,
+                .gainThreshold = 15360,
                 .aeRoute = {
                     .totalNum = 0,
                 },
@@ -129,13 +138,13 @@ ISP_CALIB_DATA_S calibration_data = {
 
 #if (RTE_ISP_WBM_MODULE)
         .wbm = {
-            .enable   = 1,
+            .enable   = 0,
             .measMode = ISP_AWB_MEAS_MODE_RGB,
             .measRect = {
                 .hOffs = 0,
                 .vOffs = 0,
-                .hSize = 1280,
-                .vSize = 720,
+                .hSize = RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH,
+                .vSize = RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT,
             },
             .wpRange = {
                 .maxY       = 0xEB,
@@ -150,13 +159,13 @@ ISP_CALIB_DATA_S calibration_data = {
 
 #if (RTE_ISP_WB_MODULE)
         .wb = {
-            .enable = 1,
-            .opType = OP_TYPE_MANUAL,
+            .enable = 0,
+            .opType = OP_TYPE_AUTO,
             .manualAttr = {
                 .wbGain = {0x100, 0x100, 0x100, 0x100},
             },
             .autoAttr = {
-                .runInterval = 1,
+                .runInterval = 12,
                 .speed = 64,
                 .tolerance = 1,
                 .initColorTemp = 5000,
@@ -270,7 +279,7 @@ ISP_CALIB_DATA_S calibration_data = {
 #if (RTE_ISP_FLT_MODULE)
         .flt = {
             .enable = 1,
-            .opType = OP_TYPE_AUTO,
+            .opType = OP_TYPE_MANUAL,
             .manualAttr = {
                 .denoiseLevel = 0,
                 .sharpenLevel = 0,
@@ -284,10 +293,12 @@ ISP_CALIB_DATA_S calibration_data = {
 
 #if (RTE_ISP_CCM_MODULE)
         .ccm = {
-            .opType = OP_TYPE_AUTO,
+            .opType = OP_TYPE_MANUAL,
             .manualAttr = {
                 .colorMatrix = {
-                    0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80
+                    289, -70, -16,
+                    -21, 183, -67,
+                    -81, -8, 304
                 },
                 .rOffset = 0,
                 .gOffset = 0,
@@ -343,10 +354,9 @@ ISP_CALIB_DATA_S calibration_data = {
 };
 
 /* ---------------------------------------------------------------------------
- * ISP Port Attribute - MT9M114
- * Native resolution: 1280x960 (SXGA)
- * ---------------------------------------------------------------------------
- */
+ * ISP Port Attribute - OV5675
+ * Native resolution: 2592x1944 (5MP)
+ * --------------------------------------------------------------------------- */
 ISP_PORT_ATTR_S port_attr = {
     .ispInputType = INPUT_TYPE_SENSOR,
     .ispMode      = ISP_MODE_RAW,
@@ -355,33 +365,34 @@ ISP_PORT_ATTR_S port_attr = {
     .snsRect = {
         .top    = 0,
         .left   = 0,
-        .width  = RTE_ISP_SENSOR_INPUT_WIDTH,
-        .height = RTE_ISP_SENSOR_INPUT_HEIGHT,
+        .width  = RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH,
+        .height = RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT,
     },
     .inFormRect = {
         .top    = 0,
         .left   = 0,
-        .width  = RTE_ISP_SENSOR_INPUT_WIDTH,
-        .height = RTE_ISP_SENSOR_INPUT_HEIGHT,
+        .width  = RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH,
+        .height = RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT,
     },
     .iSRect = {
         .top    = 0,
         .left   = 0,
-        .width  = RTE_ISP_SENSOR_INPUT_WIDTH,
-        .height = RTE_ISP_SENSOR_INPUT_HEIGHT,
+        .width  = RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH,
+        .height = RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT,
     },
+    /* Full-frame output window: no ISP crop, the application does its own
+     * center-square crop during the resize to the ML input size. */
     .outFormRect = {
-        .top    = RTE_ISP_CROP_TOP,
-        .left   = RTE_ISP_CROP_LEFT,
-        .width  = RTE_ISP_CROP_WIDTH,
-        .height = RTE_ISP_CROP_HEIGHT,
+        .top    = 0,
+        .left   = 0,
+        .width  = RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH,
+        .height = RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT,
     },
 };
 
 /* ---------------------------------------------------------------------------
- * ISP Channel Attribute - MT9M114
- * ---------------------------------------------------------------------------
- */
+ * ISP Channel Attribute - OV5675
+ * --------------------------------------------------------------------------- */
 ISP_CHN_ATTR_S chan_attr = {
     .transBus = TRANS_BUS_ONLINE,
     .chnFormat = {

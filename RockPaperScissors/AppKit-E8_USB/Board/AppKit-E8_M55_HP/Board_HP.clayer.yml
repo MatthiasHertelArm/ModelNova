@@ -50,6 +50,9 @@ layer:
   # List miscellaneous options passed via the command line to the build tool.
   misc:
     - for-compiler: AC6
+      # NOTE when re-enabling the ISP component: its prebuilt libisp.a is
+      # compiled with packed enums; add '-fshort-enums' to C-CPP here so
+      # armlink accepts it (the whole image must share the enum ABI)
       Link:
         - '--diag_suppress 6312,6314,6329,6848'
 
@@ -60,7 +63,10 @@ layer:
 
     - component: BSP:Board Config
     - component: BSP:AppKit Config&AppKit-E8-AIML
-    - component: BSP:External peripherals:CAMERA Sensor MT9M114
+    # BSP:External peripherals:CAMERA Sensor OV5675 replaced by the local
+    # override below: pack sensor driver plus an ov5675_isp_param.c carrying
+    # the color fixes from alif_ensemble-cmsis-dfp PR #63 (correct GBRG10
+    # Bayer format, AWB off with manual CCM) that are not yet in pack 2.2.0
     - component: BSP:External peripherals:Ethernet PHY
     - component: BSP:External peripherals:ILI9806E LCD panel
 
@@ -90,6 +96,8 @@ layer:
     - component: Device:SOC Peripherals:CPI
     - component: Device:SOC Peripherals:DMA
     - component: Device:SOC Peripherals:GPIO
+    # Device:SOC Peripherals:ISP intentionally not selected: see
+    # Board_HP-U85.clayer.yml for details (RAW8 capture without ISP)
     - component: Device:SOC Peripherals:MHU
     - component: Device:SOC Peripherals:MIPI CSI2
     - component: Device:SOC Peripherals:MIPI DSI
@@ -127,3 +135,10 @@ layer:
         - file: vio_AppKit-E8-AIML.c
         - file: vstream_video_in.c
         - file: vstream_video_out.c
+
+    # Local override of BSP:External peripherals:CAMERA Sensor OV5675
+    # (see comment at the removed component above)
+    - group: CameraSensor OV5675 Override
+      files:
+        - file: OV5675_Camera_Sensor.c
+        - file: ov5675_isp_param.c

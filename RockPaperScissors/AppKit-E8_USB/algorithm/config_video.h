@@ -42,9 +42,12 @@
 
 //  <o>Frame Type <0=>RAW8 <1=>RGB565 <2=>RGB888
 //  <i> Define whether camera frame is raw or RGB.
-//  <i> Default: 1
+//  <i> RAW8: OV5675 captured directly by the CPI delivers RAW8 Bayer frames
+//  <i> (the application debayers them); RGB888 applies when the ISP path
+//  <i> is enabled (RTE_CPI_ISP_PORT).
+//  <i> Default: 0
 #ifndef CAMERA_FRAME_TYPE
-#define CAMERA_FRAME_TYPE           1
+#define CAMERA_FRAME_TYPE           0
 #endif
 
 //  <o>Frame Bayer Pattern <0=>RGGB <1=>BGGR <2=>GRBG <3=>GBRG

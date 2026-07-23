@@ -44,7 +44,7 @@ extern vStreamDriver_t          Driver_vStreamVideoIn;
 extern vStreamDriver_t          Driver_vStreamVideoOut;
 #define vStream_VideoOut      (&Driver_vStreamVideoOut)
 
-/* Camera frame buffer (RAW8 or RGB565) */
+/* Camera frame buffer (RAW8, RGB565 or RGB888) */
 static uint8_t CAM_Frame[CAMERA_FRAME_SIZE] CAMERA_FRAME_BUF_ATTRIBUTE;
 
 /* Set while a single-shot capture is in flight (pipelined with processing) */
@@ -220,13 +220,34 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
   SEGGER_SYSVIEW_MarkStart(SYSVIEW_MARKER_RESIZE_IMAGE);
 #endif
 
-  /* Resize RGB image to fit ML model expected size */
+  /* Center-crop and resize camera frame to fit ML model expected size */
+#if (CAMERA_FRAME_TYPE == CAMERA_FRAME_TYPE_RAW8)
+  /* RAW8 Bayer frame (e.g. OV5675 without ISP): center-square crop with
+     bilinear debayering and scaling in one pass */
+  crop_and_debayer(inFrame,
+                   CAMERA_FRAME_WIDTH,
+                   CAMERA_FRAME_HEIGHT,
+                   (CAMERA_FRAME_WIDTH - CAMERA_FRAME_HEIGHT) / 2,
+                   0,
+                   buf,
+                   ML_IMAGE_WIDTH,
+                   ML_IMAGE_HEIGHT,
+                   (bayer_pattern_t)CAMERA_FRAME_BAYER);
+#elif (CAMERA_FRAME_TYPE == CAMERA_FRAME_TYPE_RGB888)
+  crop_resize_rgb888_to_rgb888(inFrame,
+                               CAMERA_FRAME_WIDTH,
+                               CAMERA_FRAME_HEIGHT,
+                               buf,
+                               ML_IMAGE_WIDTH,
+                               ML_IMAGE_HEIGHT);
+#else
   crop_resize_rgb565_to_rgb888(inFrame,
                                CAMERA_FRAME_WIDTH,
                                CAMERA_FRAME_HEIGHT,
                                buf,
                                ML_IMAGE_WIDTH,
                                ML_IMAGE_HEIGHT);
+#endif
 
 #ifdef USE_SEGGER_SYSVIEW
   SEGGER_SYSVIEW_MarkStop(SYSVIEW_MARKER_RESIZE_IMAGE);

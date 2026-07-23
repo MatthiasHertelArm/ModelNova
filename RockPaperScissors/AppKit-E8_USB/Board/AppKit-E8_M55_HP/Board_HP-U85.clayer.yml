@@ -42,6 +42,9 @@ layer:
   # List miscellaneous options passed via the command line to the build tool.
   misc:
     - for-compiler: AC6
+      # NOTE when re-enabling the ISP component: its prebuilt libisp.a is
+      # compiled with packed enums; add '-fshort-enums' to C-CPP here so
+      # armlink accepts it (the whole image must share the enum ABI)
       Link:
         - '--diag_suppress 6312,6314,6329,6848'
 
@@ -52,10 +55,10 @@ layer:
 
     - component: BSP:Board Config
     - component: BSP:AppKit Config&AppKit-E8-AIML
-    # BSP:External peripherals:CAMERA Sensor MT9M114 replaced by the local
-    # override below: idempotent sensor stream start (the sensor keeps
-    # streaming between single-shot CPI captures, removing the per-frame
-    # I2C system-state transition and exposure restart)
+    # BSP:External peripherals:CAMERA Sensor OV5675 replaced by the local
+    # override below: pack sensor driver plus an ov5675_isp_param.c carrying
+    # the color fixes from alif_ensemble-cmsis-dfp PR #63 (correct GBRG10
+    # Bayer format, AWB off with manual CCM) that are not yet in pack 2.2.0
     - component: BSP:External peripherals:Ethernet PHY
     - component: BSP:External peripherals:ILI9806E LCD panel
 
@@ -85,6 +88,12 @@ layer:
     - component: Device:SOC Peripherals:CPI
     - component: Device:SOC Peripherals:DMA
     - component: Device:SOC Peripherals:GPIO
+    # Device:SOC Peripherals:ISP intentionally not selected: with the 2.2.0
+    # pack the CSI->ISP->CPI routing wedges after the first frame (the ISP
+    # never sees a second v-sync). The OV5675 is captured RAW8 Bayer by the
+    # CPI directly and debayered in software; re-add the ISP component and
+    # set RTE_ISP=1 / RTE_CPI_ISP_PORT=1 once the fixes from
+    # alif_ensemble-cmsis-dfp PR #63 are released in a pack.
     - component: Device:SOC Peripherals:MHU
     - component: Device:SOC Peripherals:MIPI CSI2
     - component: Device:SOC Peripherals:MIPI DSI
@@ -123,9 +132,9 @@ layer:
         - file: vstream_video_in.c
         - file: vstream_video_out.c
 
-    # Local override of BSP:External peripherals:CAMERA Sensor MT9M114
+    # Local override of BSP:External peripherals:CAMERA Sensor OV5675
     # (see comment at the removed component above)
-    - group: CameraSensor MT9M114 Override
+    - group: CameraSensor OV5675 Override
       files:
-        - file: MT9M114_Camera_Sensor.c
-        - file: mt9m114_isp_param.c
+        - file: OV5675_Camera_Sensor.c
+        - file: ov5675_isp_param.c

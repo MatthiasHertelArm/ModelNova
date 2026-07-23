@@ -129,6 +129,31 @@ void crop_resize_rgb565_to_rgb888(const uint8_t *src,
                                   int dst_height);
 
 /**
+ * @brief Center-crop and resize an RGB888 image.
+ *
+ * RGB888 counterpart of @ref crop_resize_rgb565_to_rgb888: performs a center
+ * crop of the source image to a square region (based on the source height),
+ * then resizes it to the destination resolution using fixed-point sampling.
+ *
+ * @param src         Pointer to the source image buffer (RGB888 format).
+ * @param src_width   Width of the source image in pixels.
+ * @param src_height  Height of the source image in pixels.
+ * @param dst         Pointer to the destination image buffer (RGB888 format).
+ * @param dst_width   Width of the destination image in pixels.
+ * @param dst_height  Height of the destination image in pixels.
+ *
+ * @note The destination buffer must be preallocated with at least
+ *       `dst_width * dst_height * 3` bytes.
+ * @note This function assumes src_width >= src_height for proper center cropping.
+ */
+void crop_resize_rgb888_to_rgb888(const uint8_t *src,
+                                  int src_width,
+                                  int src_height,
+                                  uint8_t *dst,
+                                  int dst_width,
+                                  int dst_height);
+
+/**
  * @brief Resize an image with format conversion.
  *
  * This function resizes an input image to a new resolution. It supports different image
