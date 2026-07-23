@@ -283,11 +283,17 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
     }
   }
 
-  /* Digital exposure: lift the linear mean to a mid target, but cap the
-     gain so the 99th percentile stays below clipping. Compensates the
-     sensor AEC converging on a dark average. */
-  if (cnt > (uint32_t)(num_px / 16)) {
-    uint32_t mean_g = sum_g / cnt;
+  /* Digital exposure: lift the linear frame mean to a mid target, but cap
+     the gain so the 99th percentile only mildly clips. Compensates the
+     sensor AEC converging on a dark average. The mean comes from the
+     full-frame histogram - dark pixels must count, they are what the
+     exposure needs to rescue. */
+  {
+    uint32_t sum_all = 0U;
+    for (int bin = 0; bin < 64; ++bin) {
+      sum_all += hist_g[bin] * (((uint32_t)bin << 2) + 2U);
+    }
+    uint32_t mean_all = sum_all / (uint32_t)num_px;
     uint32_t tail = (uint32_t)num_px / 100U; /* ~1% of all pixels */
     uint32_t acc = 0U;
     int p99_bin = 63;
@@ -299,8 +305,8 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
       p99_bin--;
     }
     uint32_t p99 = ((uint32_t)p99_bin << 2) + 3U;
-    if (mean_g > 0U) {
-      int target = (110 << 8) / (int)mean_g;        /* reach mid exposure    */
+    if (mean_all > 0U) {
+      int target = (110 << 8) / (int)mean_all;      /* reach mid exposure    */
       int limit = (290 << 8) / (int)(p99 + 1U);     /* allow mild p99 clip   */
       if (target > limit) target = limit;
       if (target < 256) target = 256;               /* never darken         */
@@ -309,7 +315,7 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
     }
   }
 
-  if ((sum_r > 0U) && (sum_b > 0U)) {
+  if ((cnt > (uint32_t)(num_px / 16)) && (sum_r > 0U) && (sum_b > 0U)) {
     int target_r = (int)(((uint64_t)sum_g << 8) / sum_r);
     int target_b = (int)(((uint64_t)sum_g << 8) / sum_b);
     if (target_r < 128) target_r = 128;      /* clamp gains to [0.5 .. 8.0] */
@@ -338,18 +344,19 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
   }
 
   /* Compose black level + white balance + exposure into per-channel
-     linear LUTs */
-  uint8_t lin_r[256], lin_g[256], lin_b[256];
+     linear LUTs. Values are intentionally not clamped here: clipping is
+     done per pixel on all three channels together so blown highlights
+     stay white instead of taking the hue of the unclipped channel. */
+  uint16_t lin_r[256], lin_g[256], lin_b[256];
   for (int i = 0; i < 256; ++i) {
     int v = (blc_lut[i] * gain_exp_q8) >> 8;
-    int r = (v * gain_r_q8) >> 8;
-    int b = (v * gain_b_q8) >> 8;
-    lin_r[i] = (uint8_t)(r > 255 ? 255 : r);
-    lin_g[i] = (uint8_t)(v > 255 ? 255 : v);
-    lin_b[i] = (uint8_t)(b > 255 ? 255 : b);
+    lin_r[i] = (uint16_t)((v * gain_r_q8) >> 8);
+    lin_g[i] = (uint16_t)v;
+    lin_b[i] = (uint16_t)((v * gain_b_q8) >> 8);
   }
 
-  /* Apply: linear LUTs (+ radial red gain) -> color matrix -> gamma */
+  /* Apply: linear LUTs (+ radial red gain) -> hue-preserving clip ->
+     color matrix -> gamma */
   uint8_t *q = img;
   for (int y = 0; y < height; ++y) {
     int dy2 = (y - cy) * (y - cy);
@@ -365,9 +372,16 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
           idx = (uint32_t)lsc_r_len - 1U;
         }
         r0 = (r0 * lsc_r_q8[idx]) >> 8;
-        if (r0 > 255) {
-          r0 = 255;
-        }
+      }
+
+      /* Scale all channels together when one would clip, so highlights
+         desaturate toward white instead of tinting */
+      int m = r0 > g0 ? r0 : g0;
+      if (b0 > m) m = b0;
+      if (m > 255) {
+        r0 = (r0 * 255) / m;
+        g0 = (g0 * 255) / m;
+        b0 = (b0 * 255) / m;
       }
 
       int r1 = (ccm[0][0] * r0 + ccm[0][1] * g0 + ccm[0][2] * b0) >> 8;
