@@ -62,9 +62,17 @@ extern ARM_DRIVER_CPI Driver_CPI;
 #define CAM_AE_GAIN_MAX   0xF8000U  /* 15.5x, Q16.16 (sensor max is 15.9x) */
 
 static void CameraAEUpdate (uint32_t mean_linear) {
-  /* Register-table defaults: 512 lines exposure, 6x analog gain */
-  static uint32_t exp_lines = 512U;
+  /* Register-table defaults: 1024 lines exposure (reg 512 x2), 6x gain */
+  static uint32_t exp_lines = 1024U;
   static uint32_t gain_q16  = 0x60000U;
+  static uint32_t frame_cnt = 0U;
+
+  /* Sensor register writes take effect one to two frames later; adjusting
+     every frame chases stale measurements and oscillates. */
+  frame_cnt++;
+  if ((frame_cnt % 3U) != 0U) {
+    return;
+  }
 
   if (mean_linear == 0U) {
     mean_linear = 1U;

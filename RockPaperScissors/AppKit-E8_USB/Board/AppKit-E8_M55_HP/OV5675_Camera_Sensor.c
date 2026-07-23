@@ -855,8 +855,13 @@ static const OV5675_REG OV5675_640x480_regs[] = {
  */
 static int32_t OV5675_Camera_Exposure_Set(uint32_t intLine)
 {
-    /* Exposure register stores value in 1/16 row units: reg = intLine << 4. */
-    uint32_t reg_val = intLine << 4;
+    /* The exposure register holds the value in 1/16 row units, but on the
+       OV5675 the effective exposure is TWICE the register value (see the
+       mainline Linux ov5675 driver): reg = (intLine << 4) / 2 = intLine << 3.
+       Writing intLine << 4 doubles the exposure and can exceed the frame
+       time (VTS), which breaks the frame timing and makes the brightness
+       oscillate. */
+    uint32_t reg_val = intLine << 3;
     int32_t  ret;
 
     ret = OV5675_WRITE_REG(OV5675_COARSE_INTEGRATION_TIME_H, (reg_val >> 16) & 0x0FU, 1);
