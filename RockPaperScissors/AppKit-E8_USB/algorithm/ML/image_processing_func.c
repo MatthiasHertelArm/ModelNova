@@ -324,12 +324,21 @@ __WEAK void crop_and_debayer(const uint8_t *src,
 
         case 1: // Green
           g = center;
-          if ((row_parity == 0 && col_parity == 1) || (row_parity == 1 && col_parity == 0)) {
-            r = (p[sy * src_width + sx - 1] + p[sy * src_width + sx + 1]) / 2;
-            b = (p[(sy - 1) * src_width + sx] + p[(sy + 1) * src_width + sx]) / 2;
-          } else {
-            b = (p[sy * src_width + sx - 1] + p[sy * src_width + sx + 1]) / 2;
-            r = (p[(sy - 1) * src_width + sx] + p[(sy + 1) * src_width + sx]) / 2;
+          {
+            /* The two green sites of a Bayer quad have opposite neighbor
+               orientations; derive the horizontal neighbor channel from the
+               pattern table instead of assuming an anti-diagonal (RGGB/BGGR)
+               green layout. With greens on the main diagonal (GRBG/GBRG) the
+               fixed assignment swapped R and B on half of the green sites. */
+            int havg = (p[sy * src_width + sx - 1] + p[sy * src_width + sx + 1]) / 2;
+            int vavg = (p[(sy - 1) * src_width + sx] + p[(sy + 1) * src_width + sx]) / 2;
+            if (offsets[row_parity][col_parity ^ 1] == 2) { // horizontal neighbors are red
+              r = havg;
+              b = vavg;
+            } else {
+              r = vavg;
+              b = havg;
+            }
           }
           break;
 
