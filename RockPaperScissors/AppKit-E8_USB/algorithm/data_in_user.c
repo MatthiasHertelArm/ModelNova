@@ -234,10 +234,14 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
                    ML_IMAGE_HEIGHT,
                    (bayer_pattern_t)CAMERA_FRAME_BAYER);
   /* Raw sensor data has a black-level pedestal, no white balance (Bayer
-     green dominates) and desaturated colors; apply the corrections a
-     camera ISP would normally do */
-  image_gray_world_wb_gamma(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT,
-                            CAMERA_BLACK_LEVEL, CAMERA_SATURATION_Q8);
+     green dominates), desaturated colors and radial red lens shading;
+     apply the corrections a camera ISP would normally do */
+  {
+    static const uint16_t lsc_r_q8[] = CAMERA_LSC_R_GAIN_Q8;
+    image_gray_world_wb_gamma(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT,
+                              CAMERA_BLACK_LEVEL, CAMERA_SATURATION_Q8,
+                              lsc_r_q8, (int)(sizeof(lsc_r_q8) / sizeof(lsc_r_q8[0])));
+  }
 #elif (CAMERA_FRAME_TYPE == CAMERA_FRAME_TYPE_RGB888)
   crop_resize_rgb888_to_rgb888(inFrame,
                                CAMERA_FRAME_WIDTH,

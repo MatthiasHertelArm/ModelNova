@@ -182,7 +182,8 @@ __WEAK void image_debayer(const uint8_t *raw,
 
 
 void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
-                               int black_level, int saturation_q8) {
+                               int black_level, int saturation_q8,
+                               const uint16_t *lsc_r_q8, int lsc_r_len) {
   /* sRGB OETF (gamma encode) table for linear 8-bit input, built once */
   static uint8_t gamma_lut[256];
   static int gamma_lut_ready = 0;
@@ -235,17 +236,43 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
     }
   }
 
-  /* Gray-world measurement on black-level-corrected values; skip nearly
-     black pixels where sensor noise dominates the channel ratios */
+  /* Radial lens shading index scale: idx = (rpix2 * scale) >> 16, where
+     rpix2 is the squared distance from the image center and the last table
+     entry corresponds to the image corner */
+  int cx = width / 2;
+  int cy = height / 2;
+  uint32_t lsc_scale = 0U;
+  if ((lsc_r_q8 != NULL) && (lsc_r_len > 0)) {
+    uint32_t rmax2 = (uint32_t)(cx * cx + cy * cy);
+    lsc_scale = (((uint32_t)lsc_r_len << 16) + rmax2 - 1U) / rmax2;
+  }
+
+  /* Gray-world measurement on black-level- and shading-corrected values;
+     skip nearly black pixels where sensor noise dominates the ratios */
   uint32_t sum_r = 0U, sum_g = 0U, sum_b = 0U;
   int num_px = width * height;
   const uint8_t *p = img;
-  for (int i = 0; i < num_px; ++i, p += 3) {
-    int g = blc_lut[p[1]];
-    if (g >= 8) {
-      sum_r += blc_lut[p[0]];
-      sum_g += (uint32_t)g;
-      sum_b += blc_lut[p[2]];
+  for (int y = 0; y < height; ++y) {
+    int dy2 = (y - cy) * (y - cy);
+    for (int x = 0; x < width; ++x, p += 3) {
+      int g = blc_lut[p[1]];
+      if (g >= 8) {
+        uint32_t r = blc_lut[p[0]];
+        if (lsc_scale != 0U) {
+          uint32_t rpix2 = (uint32_t)(dy2 + (x - cx) * (x - cx));
+          uint32_t idx = (rpix2 * lsc_scale) >> 16;
+          if (idx >= (uint32_t)lsc_r_len) {
+            idx = (uint32_t)lsc_r_len - 1U;
+          }
+          r = (r * lsc_r_q8[idx]) >> 8;
+          if (r > 255U) {
+            r = 255U;
+          }
+        }
+        sum_r += r;
+        sum_g += (uint32_t)g;
+        sum_b += blc_lut[p[2]];
+      }
     }
   }
 
@@ -288,20 +315,35 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
     lin_b[i] = (uint8_t)(b > 255 ? 255 : b);
   }
 
-  /* Apply: linear LUTs -> color matrix -> gamma */
+  /* Apply: linear LUTs (+ radial red gain) -> color matrix -> gamma */
   uint8_t *q = img;
-  for (int i = 0; i < num_px; ++i, q += 3) {
-    int r0 = lin_r[q[0]];
-    int g0 = lin_g[q[1]];
-    int b0 = lin_b[q[2]];
+  for (int y = 0; y < height; ++y) {
+    int dy2 = (y - cy) * (y - cy);
+    for (int x = 0; x < width; ++x, q += 3) {
+      int r0 = lin_r[q[0]];
+      int g0 = lin_g[q[1]];
+      int b0 = lin_b[q[2]];
 
-    int r1 = (ccm[0][0] * r0 + ccm[0][1] * g0 + ccm[0][2] * b0) >> 8;
-    int g1 = (ccm[1][0] * r0 + ccm[1][1] * g0 + ccm[1][2] * b0) >> 8;
-    int b1 = (ccm[2][0] * r0 + ccm[2][1] * g0 + ccm[2][2] * b0) >> 8;
+      if (lsc_scale != 0U) {
+        uint32_t rpix2 = (uint32_t)(dy2 + (x - cx) * (x - cx));
+        uint32_t idx = (rpix2 * lsc_scale) >> 16;
+        if (idx >= (uint32_t)lsc_r_len) {
+          idx = (uint32_t)lsc_r_len - 1U;
+        }
+        r0 = (r0 * lsc_r_q8[idx]) >> 8;
+        if (r0 > 255) {
+          r0 = 255;
+        }
+      }
 
-    q[0] = gamma_lut[r1 < 0 ? 0 : (r1 > 255 ? 255 : r1)];
-    q[1] = gamma_lut[g1 < 0 ? 0 : (g1 > 255 ? 255 : g1)];
-    q[2] = gamma_lut[b1 < 0 ? 0 : (b1 > 255 ? 255 : b1)];
+      int r1 = (ccm[0][0] * r0 + ccm[0][1] * g0 + ccm[0][2] * b0) >> 8;
+      int g1 = (ccm[1][0] * r0 + ccm[1][1] * g0 + ccm[1][2] * b0) >> 8;
+      int b1 = (ccm[2][0] * r0 + ccm[2][1] * g0 + ccm[2][2] * b0) >> 8;
+
+      q[0] = gamma_lut[r1 < 0 ? 0 : (r1 > 255 ? 255 : r1)];
+      q[1] = gamma_lut[g1 < 0 ? 0 : (g1 > 255 ? 255 : g1)];
+      q[2] = gamma_lut[b1 < 0 ? 0 : (b1 > 255 ? 255 : b1)];
+    }
   }
 }
 

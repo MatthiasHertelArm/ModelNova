@@ -52,10 +52,25 @@
 
 //  <o>Frame Bayer Pattern <0=>RGGB <1=>BGGR <2=>GRBG <3=>GBRG
 //  <i> Define the raw camera frame Bayer pattern.
-//  <i> Default: 3
+//  <i> OV5675 outputs GRBG (SGRBG10 in the Linux driver; the Bayer order is
+//  <i> not affected by the sensor flip controls).
+//  <i> Default: 2
 #ifndef CAMERA_FRAME_BAYER
-#define CAMERA_FRAME_BAYER          3
+#define CAMERA_FRAME_BAYER          2
 #endif
+
+//  <h>Lens Shading Correction (RAW capture path)
+//  <i> Radial red-channel gain table in Q8 (256 = 1.0), indexed by squared
+//  <i> distance from the image center (last entry = image corner). The
+//  <i> OV5675 module loses red toward the field edges (lens/IR-cut CRA
+//  <i> mismatch), which turns the image green outside the center after
+//  <i> global white balance. Calibrated from a flat-field capture.
+#ifndef CAMERA_LSC_R_GAIN_Q8
+#define CAMERA_LSC_R_GAIN_Q8 \
+  { 259, 264, 270, 277, 285, 293, 302, 313, 324, 338, 352, 369, \
+    389, 411, 437, 467, 504, 548, 602, 670, 759, 878, 1046, 1280 }
+#endif
+//  </h>
 
 //  <o>Sensor Black Level (8-bit)
 //  <i> Raw sensor pedestal subtracted before white balance (RAW capture path).

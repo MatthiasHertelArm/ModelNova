@@ -149,15 +149,22 @@ void crop_resize_rgb565_to_rgb888(const uint8_t *src,
  * The gain smoothing state is static, so the correction converges over a
  * few frames and does not flicker.
  *
+ * An optional radial lens shading correction for the red channel can be
+ * supplied as a gain table indexed by squared distance from the image
+ * center (entry lsc_r_len-1 corresponds to the image corner).
+ *
  * @param[in,out] img            Pointer to the RGB888 image buffer (modified in place).
  * @param[in]     width          Image width in pixels.
  * @param[in]     height         Image height in pixels.
  * @param[in]     black_level    Sensor pedestal in the 8-bit range (clamped to 0..64).
  * @param[in]     saturation_q8  Saturation matrix strength in Q8, 256 = 1.0
  *                               (clamped to 256..768).
+ * @param[in]     lsc_r_q8       Radial red gain table in Q8, or NULL to disable.
+ * @param[in]     lsc_r_len      Number of entries in lsc_r_q8.
  */
 void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
-                               int black_level, int saturation_q8);
+                               int black_level, int saturation_q8,
+                               const uint16_t *lsc_r_q8, int lsc_r_len);
 
 /**
  * @brief Center-crop and resize an RGB888 image.
