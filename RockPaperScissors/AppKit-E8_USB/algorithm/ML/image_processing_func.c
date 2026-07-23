@@ -307,8 +307,8 @@ int image_gray_world_wb_gamma(uint8_t *img, int width, int height,
     }
     uint32_t p99 = ((uint32_t)p99_bin << 2) + 3U;
     if (mean_all > 0U) {
-      int target = (110 << 8) / (int)mean_all;      /* reach mid exposure    */
-      int limit = (290 << 8) / (int)(p99 + 1U);     /* allow mild p99 clip   */
+      int target = (140 << 8) / (int)mean_all;      /* reach bright exposure */
+      int limit = (330 << 8) / (int)(p99 + 1U);     /* allow mild p99 clip   */
       if (target > limit) target = limit;
       if (target < 256) target = 256;               /* never darken         */
       if (target > 2048) target = 2048;             /* at most 8x           */
