@@ -26,15 +26,15 @@
 
 //  <o>Camera Frame Width
 //  <i> Define the camera frame width.
-//  <i> Common camera frame widths: 320, 640, 1024, 1280.
-//  <i> Default: 640
+//  <i> ISP path: the ISP crops a centered square from the sensor and scales
+//  <i> it to this size.
+//  <i> Default: 480
 #ifndef CAMERA_FRAME_WIDTH
-#define CAMERA_FRAME_WIDTH          640
+#define CAMERA_FRAME_WIDTH          480
 #endif
 
 //  <o>Camera Frame Height
 //  <i> Define the camera frame height.
-//  <i> Common camera frame heights: 240, 480, 600, 720.
 //  <i> Default: 480
 #ifndef CAMERA_FRAME_HEIGHT
 #define CAMERA_FRAME_HEIGHT         480
@@ -47,7 +47,7 @@
 //  <i> is enabled (RTE_CPI_ISP_PORT).
 //  <i> Default: 0
 #ifndef CAMERA_FRAME_TYPE
-#define CAMERA_FRAME_TYPE           0
+#define CAMERA_FRAME_TYPE           2
 #endif
 
 //  <o>Frame Bayer Pattern <0=>RGGB <1=>BGGR <2=>GRBG <3=>GBRG

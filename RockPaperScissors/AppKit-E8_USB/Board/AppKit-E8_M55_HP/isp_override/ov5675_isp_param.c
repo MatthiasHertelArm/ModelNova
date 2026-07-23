@@ -11,21 +11,11 @@
 /*******************************************************************************
  * @file     ov5675_isp_param.c
  * @brief    ISP calibration and pipeline settings for the OV5675 sensor.
+ *           This file is compiled when the OV5675 camera sensor component
+ *           is selected in the RTE configuration.
  *
- *           Local override of the Ensemble 2.2.0 pack file with the color
- *           fixes from alif_ensemble-cmsis-dfp PR #63 back-ported onto the
- *           2.2.0 static-configuration ISP driver:
- *             - auto white balance disabled, manual CCM instead
- *             - AE/AWB statistics windows follow the sensor frame size
- *             - AE exposure time capped at 16 ms (keeps frame rate up)
- *           The input pixel format is kept at the pack default (GRBG8); the
- *           PR #63 change to GBRG10 belongs to the reworked driver in that
- *           PR and stalls the 2.2.0 ISP pipeline.
- *
- *           NOTE: this file is only compiled when the ISP is enabled
- *           (RTE_ISP). The example currently captures RAW8 Bayer directly
- *           with the CPI because the CSI->ISP->CPI routing wedges after the
- *           first frame on the 2.2.0 pack (see Board_HP-U85.clayer.yml).
+ *           Parameters are not yet sensor-calibrated. Update calibration_data,
+ *           port_attr, and chan_attr with sensor-specific tuned values.
  ******************************************************************************/
 
 #include "RTE_Components.h"
@@ -361,7 +351,7 @@ ISP_PORT_ATTR_S port_attr = {
     .ispInputType = INPUT_TYPE_SENSOR,
     .ispMode      = ISP_MODE_RAW,
     .hdrMode      = HDR_MODE_LINEAR,
-    .pixelFormat  = PIXEL_FORMAT_GRBG8,
+    .pixelFormat  = PIXEL_FORMAT_GBRG10,
     .snsRect = {
         .top    = 0,
         .left   = 0,
@@ -380,8 +370,6 @@ ISP_PORT_ATTR_S port_attr = {
         .width  = RTE_OV5675_CAMERA_SENSOR_FRAME_WIDTH,
         .height = RTE_OV5675_CAMERA_SENSOR_FRAME_HEIGHT,
     },
-    /* Full-frame output window: no ISP crop, the application does its own
-     * center-square crop during the resize to the ML input size. */
     .outFormRect = {
         .top    = 0,
         .left   = 0,
@@ -401,5 +389,25 @@ ISP_CHN_ATTR_S chan_attr = {
         .pixelFormat = RTE_ISP_OUTPUT_FORMAT,
     },
 };
+
+void isp_param_set_crop(vsi_u32_t top, vsi_u32_t left, vsi_u32_t width, vsi_u32_t height)
+{
+    /* RECT_S field naming is swapped in the libisp:
+     * RECT_S.top  -> ISP_OUT_H_OFFS (horizontal/left offset)
+     * RECT_S.left -> ISP_OUT_V_OFFS (vertical/top offset)
+     * We swap here so our API uses conventional image coordinates.
+     */
+    port_attr.outFormRect.top    = left;
+    port_attr.outFormRect.left   = top;
+    port_attr.outFormRect.width  = width;
+    port_attr.outFormRect.height = height;
+}
+
+
+void isp_param_set_output_dimensions(vsi_u32_t width, vsi_u32_t height)
+{
+    chan_attr.chnFormat.width  = width;
+    chan_attr.chnFormat.height = height;
+}
 
 #endif /* defined(RTE_Drivers_ISP) && defined(RTE_ISP) && (RTE_ISP == 1) */

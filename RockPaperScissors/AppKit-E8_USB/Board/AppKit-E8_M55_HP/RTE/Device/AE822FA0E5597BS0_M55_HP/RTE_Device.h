@@ -371,7 +371,7 @@
 
 // <e> ISP (ISP) [Driver_ISP]
 // <i> Configuration settings for Driver_ISP in component ::Drivers:ISP
-#define RTE_ISP 0
+#define RTE_ISP 1
 #if RTE_ISP
 
 // <o> ISP IRQ priority <0-255>
@@ -514,7 +514,7 @@
 
 // <o> ISP Scaler Output Width
 // <i> Width in pixels of the ISP scaler output (after scaling from sensor dimensions).
-#define RTE_ISP_OUTPUT_WIDTH        640
+#define RTE_ISP_OUTPUT_WIDTH        480
 
 // <o> ISP Scaler Output Height
 // <i> Height in pixels of the ISP scaler output (after scaling from sensor dimensions).
@@ -1268,7 +1268,7 @@
 // <i> Default: 0
 // <i> 0 is the configuration verified with the ISP; the ISP scaler
 // <i> downscales 1296x972 to the 640x480 output (same 4:3 aspect).
-#define RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG            3
+#define RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG            0
 
 // <i> OV5675 frame height (derived from IMAGE_CONFIG)
 // <i> defines OV5675 frame height.

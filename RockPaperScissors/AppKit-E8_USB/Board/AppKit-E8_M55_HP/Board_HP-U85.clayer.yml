@@ -30,6 +30,17 @@ layer:
   define:
     - CMSIS_target_header: \"AppKit-E8-AIML.h\"
     - ETHOSU85
+    # Normally set by the pack ISP component; needed by the local ISP
+    # override sources (see the ISP Override group below)
+    - RTE_Drivers_ISP
+
+  # Local ISP override headers must shadow the pack's Alif_CMSIS copies;
+  # the VeriSilicon ISP library headers come from the pack (normally added
+  # by the Device:SOC Peripherals:ISP component, which the override replaces)
+  add-path:
+    - isp_override
+    - $Pack(AlifSemiconductor::Ensemble)$/libs/isp/inc
+    - $Pack(AlifSemiconductor::Ensemble)$/libs/isp
 
   # List the packs used in the layer.
   packs:
@@ -42,9 +53,10 @@ layer:
   # List miscellaneous options passed via the command line to the build tool.
   misc:
     - for-compiler: AC6
-      # NOTE when re-enabling the ISP component: its prebuilt libisp.a is
-      # compiled with packed enums; add '-fshort-enums' to C-CPP here so
-      # armlink accepts it (the whole image must share the enum ABI)
+      C-CPP:
+        # The prebuilt ISP library (libisp.a) is compiled with packed enums;
+        # build the whole image with the same enum ABI so armlink accepts it
+        - -fshort-enums
       Link:
         - '--diag_suppress 6312,6314,6329,6848'
 
@@ -137,4 +149,14 @@ layer:
     - group: CameraSensor OV5675 Override
       files:
         - file: OV5675_Camera_Sensor.c
-        - file: ov5675_isp_param.c
+
+    # Local override of Device:SOC Peripherals:ISP - the pack 2.2.0 ISP
+    # driver predates the fixes from alif_ensemble-cmsis-dfp PR #63
+    # (runtime centered-square crop, AE tuning, correct GBRG10 sensor
+    # format, sensor param cleanup). Sources are pack copies with the PR
+    # applied; libisp.a is copied verbatim from the pack.
+    - group: ISP Override
+      files:
+        - file: isp_override/Driver_ISP.c
+        - file: isp_override/ov5675_isp_param.c
+        - file: isp_override/libisp.a
