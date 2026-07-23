@@ -181,6 +181,84 @@ __WEAK void image_debayer(const uint8_t *raw,
 }
 
 
+void image_gray_world_wb_gamma(uint8_t *img, int width, int height) {
+  /* sRGB OETF (gamma encode) table for linear 8-bit input, built once */
+  static uint8_t gamma_lut[256];
+  static int gamma_lut_ready = 0;
+  /* Smoothed white balance gains in Q8 (256 = 1.0) */
+  static int gain_r_q8 = 256;
+  static int gain_b_q8 = 256;
+
+  if (!gamma_lut_ready) {
+    for (int i = 0; i < 256; ++i) {
+      float lum = i * (1.0f / 255.0f);
+      float enc;
+      if (lum <= 0.0031308f) {
+        enc = 12.92f * lum;
+      } else {
+        /* s = lum^(1/2.4) via Newton iteration on s^12 = lum^5
+           (integer powers only, avoids pulling in powf) */
+        float lum2 = lum * lum;
+        float lum5 = lum2 * lum2 * lum;
+        float s = 1.0f;
+        for (int it = 0; it < 12; ++it) {
+          float s2 = s * s;
+          float s4 = s2 * s2;
+          float s11 = s4 * s4 * s2 * s;
+          s -= (s11 * s - lum5) / (12.0f * s11);
+          if (s < 1e-4f) {
+            s = 1e-4f;
+            break;
+          }
+        }
+        enc = 1.055f * s - 0.055f;
+      }
+      int v = (int)(enc * 255.0f + 0.5f);
+      gamma_lut[i] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }
+    gamma_lut_ready = 1;
+  }
+
+  /* Gray-world measurement */
+  uint32_t sum_r = 0U, sum_g = 0U, sum_b = 0U;
+  int num_px = width * height;
+  const uint8_t *p = img;
+  for (int i = 0; i < num_px; ++i, p += 3) {
+    sum_r += p[0];
+    sum_g += p[1];
+    sum_b += p[2];
+  }
+
+  if ((sum_r > 0U) && (sum_b > 0U)) {
+    int target_r = (int)(((uint64_t)sum_g << 8) / sum_r);
+    int target_b = (int)(((uint64_t)sum_g << 8) / sum_b);
+    if (target_r < 128) target_r = 128;      /* clamp gains to [0.5 .. 4.0] */
+    if (target_r > 1024) target_r = 1024;
+    if (target_b < 128) target_b = 128;
+    if (target_b > 1024) target_b = 1024;
+    /* Converge in a few frames without flicker */
+    gain_r_q8 += (target_r - gain_r_q8) / 4;
+    gain_b_q8 += (target_b - gain_b_q8) / 4;
+  }
+
+  /* Compose gain + gamma into per-channel LUTs, then apply in one pass */
+  uint8_t lut_r[256], lut_g[256], lut_b[256];
+  for (int i = 0; i < 256; ++i) {
+    int r = (i * gain_r_q8) >> 8;
+    int b = (i * gain_b_q8) >> 8;
+    lut_r[i] = gamma_lut[r > 255 ? 255 : r];
+    lut_g[i] = gamma_lut[i];
+    lut_b[i] = gamma_lut[b > 255 ? 255 : b];
+  }
+
+  uint8_t *q = img;
+  for (int i = 0; i < num_px; ++i, q += 3) {
+    q[0] = lut_r[q[0]];
+    q[1] = lut_g[q[1]];
+    q[2] = lut_b[q[2]];
+  }
+}
+
 __WEAK void crop_and_debayer(const uint8_t *src,
                              int src_width,
                              int src_height,

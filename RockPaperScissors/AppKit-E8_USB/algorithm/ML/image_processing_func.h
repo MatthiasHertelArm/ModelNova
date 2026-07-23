@@ -129,6 +129,30 @@ void crop_resize_rgb565_to_rgb888(const uint8_t *src,
                                   int dst_height);
 
 /**
+ * @brief Apply gray-world white balance and sRGB gamma to an RGB888 image in place.
+ *
+ * Intended for camera frames debayered from raw sensor data without a
+ * hardware ISP: raw sensor output is linear and has no white balance, which
+ * makes it look dark and green (the Bayer green channel has roughly twice
+ * the sensitivity of red/blue).
+ *
+ * Per call the function:
+ * 1. Measures the average of each color channel.
+ * 2. Updates smoothed red/blue gains so the channel averages match green
+ *    (gray-world assumption), clamped to [0.5x .. 4x].
+ * 3. Applies the gains and an sRGB gamma (OETF) curve via per-channel
+ *    lookup tables in a single pass.
+ *
+ * The gain smoothing state is static, so the correction converges over a
+ * few frames and does not flicker.
+ *
+ * @param[in,out] img     Pointer to the RGB888 image buffer (modified in place).
+ * @param[in]     width   Image width in pixels.
+ * @param[in]     height  Image height in pixels.
+ */
+void image_gray_world_wb_gamma(uint8_t *img, int width, int height);
+
+/**
  * @brief Center-crop and resize an RGB888 image.
  *
  * RGB888 counterpart of @ref crop_resize_rgb565_to_rgb888: performs a center

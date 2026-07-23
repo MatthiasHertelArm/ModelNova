@@ -59,8 +59,8 @@ Refer to ["Alif Conductor Tool Manual"](https://conductor.alifsemi.com/Alif_HTML
 The example uses the **OV5675** camera module on the MIPI camera connector
 (J9), configured for its VGA mode (640 x 480, 4x4 binned, RAW10 over 2 CSI
 lanes). The CPI captures the stream directly as RAW8 Bayer (GBRG) frames and
-the application performs debayering in software; the sensor-internal AEC/AGC
-drives the exposure.
+the application performs debayering, gray-world white balance and sRGB gamma
+in software; the sensor-internal AEC/AGC drives the exposure.
 
 The sensor driver is a local copy of the pack driver
 (`OV5675_Camera_Sensor.c`), with the ISP auto-exposure hooks additionally
