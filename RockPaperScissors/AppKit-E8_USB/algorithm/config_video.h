@@ -62,13 +62,16 @@
 //  <h>Lens Shading Correction (RAW capture path)
 //  <i> Radial red-channel gain table in Q8 (256 = 1.0), indexed by squared
 //  <i> distance from the image center (last entry = image corner). The
-//  <i> OV5675 module loses red toward the field edges (lens/IR-cut CRA
-//  <i> mismatch), which turns the image green outside the center after
-//  <i> global white balance. Calibrated from a flat-field capture.
+//  <i> OV5675 module's IR-cut filter shifts blue at steep ray angles and
+//  <i> attenuates red toward the field edges, which turns the image green
+//  <i> outside the center after global white balance. The severity depends
+//  <i> on the light source spectrum (narrowband red LED light is cut almost
+//  <i> completely, broadband light only partially), so this table is a
+//  <i> compromise calibrated from a broadband flat-field capture.
 #ifndef CAMERA_LSC_R_GAIN_Q8
 #define CAMERA_LSC_R_GAIN_Q8 \
   { 259, 264, 270, 277, 285, 293, 302, 313, 324, 338, 352, 369, \
-    389, 411, 437, 467, 504, 548, 602, 670, 759, 878, 1046, 1280 }
+    389, 411, 437, 467, 504, 548, 602, 670, 759, 878, 896, 896 }
 #endif
 //  </h>
 
