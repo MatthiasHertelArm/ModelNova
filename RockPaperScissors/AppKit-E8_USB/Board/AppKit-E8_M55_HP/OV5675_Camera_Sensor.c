@@ -848,7 +848,7 @@ static const OV5675_REG OV5675_640x480_regs[] = {
 };
 #endif /* RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG == 3 */
 
-#if (RTE_ISP && RTE_ISP_AE_MODULE)
+#if (RTE_ISP_AE_MODULE)
 /**
  * @brief Set OV5675 coarse integration time (exposure lines).
  * @param intLine  : integration time in rows (from ISP AE).
@@ -1119,18 +1119,17 @@ static int32_t OV5675_Control(uint32_t control, uint32_t arg)
         if (ret != ARM_DRIVER_OK) {
             return ret;
         }
-#if (RTE_ISP && RTE_ISP_AE_MODULE)
-        /* Disable internal AEC and AGC; ISP AE module will drive exposure/gain. */
+#if (RTE_ISP_AE_MODULE)
+        /* Disable internal AEC and AGC; exposure and gain are driven
+           externally - by the ISP AE module, or by the application AE
+           loop when the ISP is not used (the internal AEC converges far
+           too dark to be usable). */
         return OV5675_WRITE_REG(OV5675_AEC_MANUAL_REG, OV5675_AEC_MANUAL_BOTH, 1);
 #else
-        /* No ISP in the pipeline: enable the sensor-internal AEC/AGC.
-           The register tables configure manual mode with a fixed exposure
-           and 6x gain (intended for ISP AE control), which overexposes
-           bright scenes and clips the colors to white. */
-        return OV5675_WRITE_REG(OV5675_AEC_MANUAL_REG, OV5675_AEC_AUTO_BOTH, 1);
+        return ARM_DRIVER_OK;
 #endif
 
-#if (RTE_ISP && RTE_ISP_AE_MODULE)
+#if (RTE_ISP_AE_MODULE)
     case CPI_ISP_CAMERA_SENSOR_EXPOSURE:
         return OV5675_Camera_Exposure_Set(arg & 0xFFFFU);
 

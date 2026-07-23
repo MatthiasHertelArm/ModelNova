@@ -47,6 +47,67 @@ extern vStreamDriver_t          Driver_vStreamVideoOut;
 /* Camera frame buffer (RAW8, RGB565 or RGB888) */
 static uint8_t CAM_Frame[CAMERA_FRAME_SIZE] CAMERA_FRAME_BUF_ATTRIBUTE;
 
+#if (CAMERA_FRAME_TYPE == CAMERA_FRAME_TYPE_RAW8)
+/* Software auto exposure for the RAW capture path: the OV5675 internal AEC
+   is disabled (it converges far too dark), so drive the sensor exposure
+   time and analog gain from the measured frame brightness through the CPI
+   driver's sensor control passthrough. */
+#include "Driver_CPI.h"
+extern ARM_DRIVER_CPI Driver_CPI;
+
+#define CAM_AE_TARGET     70U       /* linear mean target (8-bit)          */
+#define CAM_AE_EXP_MAX    1900U     /* lines; sensor VTS is 2000           */
+#define CAM_AE_EXP_MIN    8U        /* lines                               */
+#define CAM_AE_GAIN_MIN   0x10000U  /* 1x, Q16.16                          */
+#define CAM_AE_GAIN_MAX   0xF8000U  /* 15.5x, Q16.16 (sensor max is 15.9x) */
+
+static void CameraAEUpdate (uint32_t mean_linear) {
+  /* Register-table defaults: 512 lines exposure, 6x analog gain */
+  static uint32_t exp_lines = 512U;
+  static uint32_t gain_q16  = 0x60000U;
+
+  if (mean_linear == 0U) {
+    mean_linear = 1U;
+  }
+
+  /* Ratio to target in Q8; +-10% dead zone, slew-limited per frame */
+  uint32_t ratio_q8 = (CAM_AE_TARGET << 8) / mean_linear;
+  if ((ratio_q8 > 230U) && (ratio_q8 < 282U)) {
+    return;
+  }
+  if (ratio_q8 < 179U) {
+    ratio_q8 = 179U;    /* at most 0.7x down per step */
+  }
+  if (ratio_q8 > 358U) {
+    ratio_q8 = 358U;    /* at most 1.4x up per step   */
+  }
+
+  /* Scale the total exposure, then split: exposure time first, analog
+     gain for the remainder */
+  uint64_t total = ((uint64_t)exp_lines * gain_q16 * ratio_q8) >> 8;
+  uint64_t lines = total / CAM_AE_GAIN_MIN;
+  if (lines > CAM_AE_EXP_MAX) {
+    lines = CAM_AE_EXP_MAX;
+  }
+  if (lines < CAM_AE_EXP_MIN) {
+    lines = CAM_AE_EXP_MIN;
+  }
+  uint32_t gain = (uint32_t)(total / lines);
+  if (gain < CAM_AE_GAIN_MIN) {
+    gain = CAM_AE_GAIN_MIN;
+  }
+  if (gain > CAM_AE_GAIN_MAX) {
+    gain = CAM_AE_GAIN_MAX;
+  }
+
+  exp_lines = (uint32_t)lines;
+  gain_q16  = gain;
+
+  (void)Driver_CPI.Control(CPI_ISP_CAMERA_SENSOR_EXPOSURE, exp_lines);
+  (void)Driver_CPI.Control(CPI_ISP_CAMERA_SENSOR_GAIN, gain_q16);
+}
+#endif /* CAMERA_FRAME_TYPE_RAW8 */
+
 /* Set while a single-shot capture is in flight (pipelined with processing) */
 static uint8_t capture_pending = 0U;
 
@@ -235,12 +296,14 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
                    (bayer_pattern_t)CAMERA_FRAME_BAYER);
   /* Raw sensor data has a black-level pedestal, no white balance (Bayer
      green dominates), desaturated colors and radial red lens shading;
-     apply the corrections a camera ISP would normally do */
+     apply the corrections a camera ISP would normally do, and feed the
+     measured brightness into the sensor exposure loop */
   {
     static const uint16_t lsc_r_q8[] = CAMERA_LSC_R_GAIN_Q8;
-    image_gray_world_wb_gamma(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT,
-                              CAMERA_BLACK_LEVEL, CAMERA_SATURATION_Q8,
-                              lsc_r_q8, (int)(sizeof(lsc_r_q8) / sizeof(lsc_r_q8[0])));
+    int mean = image_gray_world_wb_gamma(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT,
+                                         CAMERA_BLACK_LEVEL, CAMERA_SATURATION_Q8,
+                                         lsc_r_q8, (int)(sizeof(lsc_r_q8) / sizeof(lsc_r_q8[0])));
+    CameraAEUpdate((uint32_t)mean);
   }
 #elif (CAMERA_FRAME_TYPE == CAMERA_FRAME_TYPE_RGB888)
   crop_resize_rgb888_to_rgb888(inFrame,

@@ -161,10 +161,14 @@ void crop_resize_rgb565_to_rgb888(const uint8_t *src,
  *                               (clamped to 256..768).
  * @param[in]     lsc_r_q8       Radial red gain table in Q8, or NULL to disable.
  * @param[in]     lsc_r_len      Number of entries in lsc_r_q8.
+ *
+ * @return Mean of the green channel after black level correction (linear,
+ *         before the exposure/white balance gains) - usable as the metering
+ *         input for a sensor exposure control loop.
  */
-void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
-                               int black_level, int saturation_q8,
-                               const uint16_t *lsc_r_q8, int lsc_r_len);
+int image_gray_world_wb_gamma(uint8_t *img, int width, int height,
+                              int black_level, int saturation_q8,
+                              const uint16_t *lsc_r_q8, int lsc_r_len);
 
 /**
  * @brief Center-crop and resize an RGB888 image.

@@ -364,6 +364,11 @@
 #endif
 // </e> LPCPI (Camera) [Driver_LPCPI]
 
+// AE module define outside the ISP block: the CPI driver and the camera
+// sensor driver use it for the exposure/gain control passthrough, which the
+// application AE loop needs even when the ISP itself is disabled
+#define RTE_ISP_AE_MODULE 1
+
 // <e> ISP (ISP) [Driver_ISP]
 // <i> Configuration settings for Driver_ISP in component ::Drivers:ISP
 #define RTE_ISP 0

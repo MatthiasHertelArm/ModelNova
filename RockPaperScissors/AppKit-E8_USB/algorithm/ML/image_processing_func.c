@@ -181,9 +181,9 @@ __WEAK void image_debayer(const uint8_t *raw,
 }
 
 
-void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
-                               int black_level, int saturation_q8,
-                               const uint16_t *lsc_r_q8, int lsc_r_len) {
+int image_gray_world_wb_gamma(uint8_t *img, int width, int height,
+                              int black_level, int saturation_q8,
+                              const uint16_t *lsc_r_q8, int lsc_r_len) {
   /* sRGB OETF (gamma encode) table for linear 8-bit input, built once */
   static uint8_t gamma_lut[256];
   static int gamma_lut_ready = 0;
@@ -288,12 +288,13 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
      sensor AEC converging on a dark average. The mean comes from the
      full-frame histogram - dark pixels must count, they are what the
      exposure needs to rescue. */
+  uint32_t mean_all;
   {
     uint32_t sum_all = 0U;
     for (int bin = 0; bin < 64; ++bin) {
       sum_all += hist_g[bin] * (((uint32_t)bin << 2) + 2U);
     }
-    uint32_t mean_all = sum_all / (uint32_t)num_px;
+    mean_all = sum_all / (uint32_t)num_px;
     uint32_t tail = (uint32_t)num_px / 100U; /* ~1% of all pixels */
     uint32_t acc = 0U;
     int p99_bin = 63;
@@ -393,6 +394,8 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
       q[2] = gamma_lut[b1 < 0 ? 0 : (b1 > 255 ? 255 : b1)];
     }
   }
+
+  return (int)mean_all;
 }
 
 __WEAK void crop_and_debayer(const uint8_t *src,
