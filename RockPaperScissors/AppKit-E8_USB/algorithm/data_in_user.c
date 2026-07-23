@@ -233,9 +233,11 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
                    ML_IMAGE_WIDTH,
                    ML_IMAGE_HEIGHT,
                    (bayer_pattern_t)CAMERA_FRAME_BAYER);
-  /* Raw sensor data is linear and unbalanced (Bayer green dominates);
-     apply white balance and gamma that a camera ISP would normally do */
-  image_gray_world_wb_gamma(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT);
+  /* Raw sensor data has a black-level pedestal, no white balance (Bayer
+     green dominates) and desaturated colors; apply the corrections a
+     camera ISP would normally do */
+  image_gray_world_wb_gamma(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT,
+                            CAMERA_BLACK_LEVEL, CAMERA_SATURATION_Q8);
 #elif (CAMERA_FRAME_TYPE == CAMERA_FRAME_TYPE_RGB888)
   crop_resize_rgb888_to_rgb888(inFrame,
                                CAMERA_FRAME_WIDTH,

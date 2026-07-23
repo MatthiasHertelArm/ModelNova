@@ -181,7 +181,8 @@ __WEAK void image_debayer(const uint8_t *raw,
 }
 
 
-void image_gray_world_wb_gamma(uint8_t *img, int width, int height) {
+void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
+                               int black_level, int saturation_q8) {
   /* sRGB OETF (gamma encode) table for linear 8-bit input, built once */
   static uint8_t gamma_lut[256];
   static int gamma_lut_ready = 0;
@@ -219,43 +220,88 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height) {
     gamma_lut_ready = 1;
   }
 
-  /* Gray-world measurement */
+  if (black_level < 0) black_level = 0;
+  if (black_level > 64) black_level = 64;
+
+  /* Black level correction table: subtract the sensor pedestal and rescale
+     to full range (in linear space, before white balance) */
+  uint8_t blc_lut[256];
+  {
+    int span = 255 - black_level;
+    for (int i = 0; i < 256; ++i) {
+      int v = i - black_level;
+      if (v < 0) v = 0;
+      blc_lut[i] = (uint8_t)((v * 255 + span / 2) / span);
+    }
+  }
+
+  /* Gray-world measurement on black-level-corrected values; skip nearly
+     black pixels where sensor noise dominates the channel ratios */
   uint32_t sum_r = 0U, sum_g = 0U, sum_b = 0U;
   int num_px = width * height;
   const uint8_t *p = img;
   for (int i = 0; i < num_px; ++i, p += 3) {
-    sum_r += p[0];
-    sum_g += p[1];
-    sum_b += p[2];
+    int g = blc_lut[p[1]];
+    if (g >= 8) {
+      sum_r += blc_lut[p[0]];
+      sum_g += (uint32_t)g;
+      sum_b += blc_lut[p[2]];
+    }
   }
 
   if ((sum_r > 0U) && (sum_b > 0U)) {
     int target_r = (int)(((uint64_t)sum_g << 8) / sum_r);
     int target_b = (int)(((uint64_t)sum_g << 8) / sum_b);
-    if (target_r < 128) target_r = 128;      /* clamp gains to [0.5 .. 4.0] */
-    if (target_r > 1024) target_r = 1024;
+    if (target_r < 128) target_r = 128;      /* clamp gains to [0.5 .. 8.0] */
+    if (target_r > 2048) target_r = 2048;
     if (target_b < 128) target_b = 128;
-    if (target_b > 1024) target_b = 1024;
+    if (target_b > 2048) target_b = 2048;
     /* Converge in a few frames without flicker */
     gain_r_q8 += (target_r - gain_r_q8) / 4;
     gain_b_q8 += (target_b - gain_b_q8) / 4;
   }
 
-  /* Compose gain + gamma into per-channel LUTs, then apply in one pass */
-  uint8_t lut_r[256], lut_g[256], lut_b[256];
-  for (int i = 0; i < 256; ++i) {
-    int r = (i * gain_r_q8) >> 8;
-    int b = (i * gain_b_q8) >> 8;
-    lut_r[i] = gamma_lut[r > 255 ? 255 : r];
-    lut_g[i] = gamma_lut[i];
-    lut_b[i] = gamma_lut[b > 255 ? 255 : b];
+  /* Saturation-restoring color matrix in Q8, gray preserving (rows sum to
+     256): M = s*I + (1-s)*L with L projecting onto BT.601 luma. Compensates
+     the sensor channel crosstalk a calibrated ISP CCM would remove. */
+  int ccm[3][3];
+  {
+    int s = saturation_q8;
+    if (s < 256) s = 256;
+    if (s > 768) s = 768;
+    const int luma[3] = {77, 150, 29}; /* 0.299, 0.587, 0.114 in Q8 */
+    for (int row = 0; row < 3; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        ccm[row][col] = (((256 - s) * luma[col]) >> 8) + ((row == col) ? s : 0);
+      }
+    }
   }
 
+  /* Compose black level + white balance into per-channel linear LUTs */
+  uint8_t lin_r[256], lin_g[256], lin_b[256];
+  for (int i = 0; i < 256; ++i) {
+    int v = blc_lut[i];
+    int r = (v * gain_r_q8) >> 8;
+    int b = (v * gain_b_q8) >> 8;
+    lin_r[i] = (uint8_t)(r > 255 ? 255 : r);
+    lin_g[i] = (uint8_t)v;
+    lin_b[i] = (uint8_t)(b > 255 ? 255 : b);
+  }
+
+  /* Apply: linear LUTs -> color matrix -> gamma */
   uint8_t *q = img;
   for (int i = 0; i < num_px; ++i, q += 3) {
-    q[0] = lut_r[q[0]];
-    q[1] = lut_g[q[1]];
-    q[2] = lut_b[q[2]];
+    int r0 = lin_r[q[0]];
+    int g0 = lin_g[q[1]];
+    int b0 = lin_b[q[2]];
+
+    int r1 = (ccm[0][0] * r0 + ccm[0][1] * g0 + ccm[0][2] * b0) >> 8;
+    int g1 = (ccm[1][0] * r0 + ccm[1][1] * g0 + ccm[1][2] * b0) >> 8;
+    int b1 = (ccm[2][0] * r0 + ccm[2][1] * g0 + ccm[2][2] * b0) >> 8;
+
+    q[0] = gamma_lut[r1 < 0 ? 0 : (r1 > 255 ? 255 : r1)];
+    q[1] = gamma_lut[g1 < 0 ? 0 : (g1 > 255 ? 255 : g1)];
+    q[2] = gamma_lut[b1 < 0 ? 0 : (b1 > 255 ? 255 : b1)];
   }
 }
 

@@ -57,6 +57,24 @@
 #define CAMERA_FRAME_BAYER          3
 #endif
 
+//  <o>Sensor Black Level (8-bit)
+//  <i> Raw sensor pedestal subtracted before white balance (RAW capture path).
+//  <i> OV5675: 64 on the 10-bit scale = 16 in the captured 8 MSBs.
+//  <i> Default: 16
+#ifndef CAMERA_BLACK_LEVEL
+#define CAMERA_BLACK_LEVEL          16
+#endif
+
+//  <o>Color Saturation (Q8)
+//  <i> Strength of the saturation-restoring color matrix applied after white
+//  <i> balance in the RAW capture path (256 = 1.0 = no boost).
+//  <i> Compensates the channel crosstalk a hardware ISP would remove with a
+//  <i> calibrated CCM.
+//  <i> Default: 410 (1.6)
+#ifndef CAMERA_SATURATION_Q8
+#define CAMERA_SATURATION_Q8        410
+#endif
+
 //  <s>Frame Buffer Section Name
 //  <i> Define the name of the camera frame buffer section.
 //  <i> Default: ".bss.camera_frame_buf"
