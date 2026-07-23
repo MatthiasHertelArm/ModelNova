@@ -190,6 +190,8 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
   /* Smoothed white balance gains in Q8 (256 = 1.0) */
   static int gain_r_q8 = 256;
   static int gain_b_q8 = 256;
+  /* Smoothed digital exposure gain in Q8 (256 = 1.0) */
+  static int gain_exp_q8 = 256;
 
   if (!gamma_lut_ready) {
     for (int i = 0; i < 256; ++i) {
@@ -248,14 +250,18 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
   }
 
   /* Gray-world measurement on black-level- and shading-corrected values;
-     skip nearly black pixels where sensor noise dominates the ratios */
+     skip nearly black pixels where sensor noise dominates the ratios.
+     Also histogram the green channel for the exposure gain. */
   uint32_t sum_r = 0U, sum_g = 0U, sum_b = 0U;
+  uint32_t cnt = 0U;
+  uint32_t hist_g[64] = {0U};
   int num_px = width * height;
   const uint8_t *p = img;
   for (int y = 0; y < height; ++y) {
     int dy2 = (y - cy) * (y - cy);
     for (int x = 0; x < width; ++x, p += 3) {
       int g = blc_lut[p[1]];
+      hist_g[g >> 2]++;
       if (g >= 8) {
         uint32_t r = blc_lut[p[0]];
         if (lsc_scale != 0U) {
@@ -272,7 +278,34 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
         sum_r += r;
         sum_g += (uint32_t)g;
         sum_b += blc_lut[p[2]];
+        cnt++;
       }
+    }
+  }
+
+  /* Digital exposure: lift the linear mean to a mid target, but cap the
+     gain so the 99th percentile stays below clipping. Compensates the
+     sensor AEC converging on a dark average. */
+  if (cnt > (uint32_t)(num_px / 16)) {
+    uint32_t mean_g = sum_g / cnt;
+    uint32_t tail = (uint32_t)num_px / 100U; /* ~1% of all pixels */
+    uint32_t acc = 0U;
+    int p99_bin = 63;
+    while (p99_bin > 0) {
+      acc += hist_g[p99_bin];
+      if (acc >= tail) {
+        break;
+      }
+      p99_bin--;
+    }
+    uint32_t p99 = ((uint32_t)p99_bin << 2) + 3U;
+    if (mean_g > 0U) {
+      int target = (110 << 8) / (int)mean_g;        /* reach mid exposure    */
+      int limit = (290 << 8) / (int)(p99 + 1U);     /* allow mild p99 clip   */
+      if (target > limit) target = limit;
+      if (target < 256) target = 256;               /* never darken         */
+      if (target > 2048) target = 2048;             /* at most 8x           */
+      gain_exp_q8 += (target - gain_exp_q8) / 4;
     }
   }
 
@@ -304,14 +337,15 @@ void image_gray_world_wb_gamma(uint8_t *img, int width, int height,
     }
   }
 
-  /* Compose black level + white balance into per-channel linear LUTs */
+  /* Compose black level + white balance + exposure into per-channel
+     linear LUTs */
   uint8_t lin_r[256], lin_g[256], lin_b[256];
   for (int i = 0; i < 256; ++i) {
-    int v = blc_lut[i];
+    int v = (blc_lut[i] * gain_exp_q8) >> 8;
     int r = (v * gain_r_q8) >> 8;
     int b = (v * gain_b_q8) >> 8;
     lin_r[i] = (uint8_t)(r > 255 ? 255 : r);
-    lin_g[i] = (uint8_t)v;
+    lin_g[i] = (uint8_t)(v > 255 ? 255 : v);
     lin_b[i] = (uint8_t)(b > 255 ? 255 : b);
   }
 
