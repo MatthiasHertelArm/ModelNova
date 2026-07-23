@@ -71,6 +71,7 @@
 /* AEC/AGC manual control: bit[3]=manual AEC, bit[2]=manual AGC */
 #define OV5675_AEC_MANUAL_REG               0x3503
 #define OV5675_AEC_MANUAL_BOTH              0x0C
+#define OV5675_AEC_AUTO_BOTH                0x00
 /* ISP AE gain registers (Q7 format: 0x0080 = 1x, 0x0780 = 15x max) */
 #define OV5675_GLOBAL_GAIN_H                0x3508
 #define OV5675_GLOBAL_GAIN_L                0x3509
@@ -1122,8 +1123,11 @@ static int32_t OV5675_Control(uint32_t control, uint32_t arg)
         /* Disable internal AEC and AGC; ISP AE module will drive exposure/gain. */
         return OV5675_WRITE_REG(OV5675_AEC_MANUAL_REG, OV5675_AEC_MANUAL_BOTH, 1);
 #else
-        /* No ISP in the pipeline: keep the sensor-internal AEC/AGC running */
-        return ARM_DRIVER_OK;
+        /* No ISP in the pipeline: enable the sensor-internal AEC/AGC.
+           The register tables configure manual mode with a fixed exposure
+           and 6x gain (intended for ISP AE control), which overexposes
+           bright scenes and clips the colors to white. */
+        return OV5675_WRITE_REG(OV5675_AEC_MANUAL_REG, OV5675_AEC_AUTO_BOTH, 1);
 #endif
 
 #if (RTE_ISP && RTE_ISP_AE_MODULE)
