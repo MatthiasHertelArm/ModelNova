@@ -20,10 +20,14 @@
 
 #include "soft_isp.h"
 
-/* Smoothed control state (one stream) */
-static int gain_r_q8   = 256;   /* white balance red gain,  256 = 1.0 */
-static int gain_b_q8   = 256;   /* white balance blue gain, 256 = 1.0 */
+/* Smoothed control state (one stream). White balance gains start at
+   typical indoor values for this sensor (red weak, blue slightly weak)
+   instead of unity, so the first frames are roughly plausible even
+   before the loop converges. */
+static int gain_r_q8   = 360;   /* white balance red gain,  256 = 1.0 */
+static int gain_b_q8   = 330;   /* white balance blue gain, 256 = 1.0 */
 static int gain_exp_q8 = 256;   /* digital exposure gain,   256 = 1.0 */
+static unsigned int frame_no = 0;
 
 /* sRGB OETF (gamma encode) table for linear 8-bit input, built once */
 static uint8_t gamma_lut[256];
@@ -238,7 +242,16 @@ void SoftISP_Process(uint8_t *rgb, int width, int height,
        on and off, which reads as color pumping. */
     static int awb_frozen_state = 0;
     int gray_pct = (cnt > 0U) ? (int)((gray_cnt * 100U) / cnt) : 0;
-    if (awb_frozen_state) {
+    if (frame_no < 1000000U) {
+        frame_no++;
+    }
+    if (frame_no <= 60U) {
+        /* Warm-up: always adapt during the first frames after boot. The
+           confidence gate otherwise latches the freeze on the very first
+           frame if the boot scene happens to be colorful, locking the
+           white point at its seed value forever. */
+        awb_frozen_state = 0;
+    } else if (awb_frozen_state) {
         if (gray_pct >= 2 * cfg->awb_min_gray_pct) {
             awb_frozen_state = 0;
         }
