@@ -56,7 +56,11 @@ static uint8_t CAM_Frame[CAMERA_FRAME_SIZE] CAMERA_FRAME_BUF_ATTRIBUTE;
 #include "Driver_CPI.h"
 extern ARM_DRIVER_CPI Driver_CPI;
 
-#define CAM_AE_TARGET     70U       /* linear mean target (8-bit)          */
+/* Sensor AE aims for the same target as the soft ISP digital stage: with a
+   single authority the digital gain settles at 1.0x whenever the sensor can
+   reach the target, and only lifts in light-starved scenes. Two different
+   targets make the loops disagree permanently and the image pump. */
+#define CAM_AE_TARGET     ((uint32_t)CAMERA_AE_TARGET)
 #define CAM_AE_EXP_MAX    1900U     /* lines; sensor VTS is 2000           */
 #define CAM_AE_EXP_MIN    8U        /* lines                               */
 #define CAM_AE_GAIN_MIN   0x10000U  /* 1x, Q16.16                          */
@@ -84,11 +88,11 @@ static void CameraAEUpdate (uint32_t mean_linear) {
   if ((ratio_q8 > 230U) && (ratio_q8 < 282U)) {
     return;
   }
-  if (ratio_q8 < 179U) {
-    ratio_q8 = 179U;    /* at most 0.7x down per step */
+  if (ratio_q8 < 205U) {
+    ratio_q8 = 205U;    /* at most 0.8x down per step  */
   }
-  if (ratio_q8 > 358U) {
-    ratio_q8 = 358U;    /* at most 1.4x up per step   */
+  if (ratio_q8 > 320U) {
+    ratio_q8 = 320U;    /* at most 1.25x up per step   */
   }
 
   /* Scale the total exposure, then split: exposure time first, analog

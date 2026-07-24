@@ -222,30 +222,44 @@ void SoftISP_Process(uint8_t *rgb, int width, int height,
             if (target > limit) target = limit;
             if (target < 256)  target = 256;            /* never darken        */
             if (target > 2048) target = 2048;           /* at most 8x          */
-            gain_exp_q8 += (target - gain_exp_q8) / 4;
+            /* Dead zone plus slow slew: the sensor AE is the primary
+               controller; this stage only trims, and reacting to every
+               metering flicker makes the image visibly pump */
+            int err = target - gain_exp_q8;
+            if ((err > 32) || (err < -32)) {
+                gain_exp_q8 += err / 8;
+            }
         }
     }
 
-    /* ---- White balance: gray-world with confidence freeze ---------------- */
+    /* ---- White balance: gray-world with confidence freeze ----------------
+       The freeze uses hysteresis (enter below min_gray_pct, exit above twice
+       that) so a scene hovering at the threshold does not toggle adaptation
+       on and off, which reads as color pumping. */
+    static int awb_frozen_state = 0;
     int gray_pct = (cnt > 0U) ? (int)((gray_cnt * 100U) / cnt) : 0;
-    int frozen   = 0;
-    if ((cnt > (uint32_t)(num_px / 16)) && (sum_r > 0U) && (sum_b > 0U)) {
-        if (gray_pct >= cfg->awb_min_gray_pct) {
-            int target_r = (int)(((uint64_t)sum_g << 8) / sum_r);
-            int target_b = (int)(((uint64_t)sum_g << 8) / sum_b);
-            if (target_r < 128)  target_r = 128;   /* gains in [0.5 .. 8.0] */
-            if (target_r > 2048) target_r = 2048;
-            if (target_b < 128)  target_b = 128;
-            if (target_b > 2048) target_b = 2048;
-            /* Converge over a few frames without flicker */
-            gain_r_q8 += (target_r - gain_r_q8) / 4;
-            gain_b_q8 += (target_b - gain_b_q8) / 4;
-        } else {
-            /* Too few near-gray pixels: the gray-world assumption is not
-               trustworthy for this scene; keep the current gains. */
-            frozen = 1;
+    if (awb_frozen_state) {
+        if (gray_pct >= 2 * cfg->awb_min_gray_pct) {
+            awb_frozen_state = 0;
+        }
+    } else {
+        if (gray_pct < cfg->awb_min_gray_pct) {
+            awb_frozen_state = 1;
         }
     }
+    if ((cnt > (uint32_t)(num_px / 16)) && (sum_r > 0U) && (sum_b > 0U) &&
+        !awb_frozen_state) {
+        int target_r = (int)(((uint64_t)sum_g << 8) / sum_r);
+        int target_b = (int)(((uint64_t)sum_g << 8) / sum_b);
+        if (target_r < 128)  target_r = 128;   /* gains in [0.5 .. 8.0] */
+        if (target_r > 2048) target_r = 2048;
+        if (target_b < 128)  target_b = 128;
+        if (target_b > 2048) target_b = 2048;
+        /* Converge slowly; white balance has no reason to be fast */
+        gain_r_q8 += (target_r - gain_r_q8) / 8;
+        gain_b_q8 += (target_b - gain_b_q8) / 8;
+    }
+    int frozen = awb_frozen_state;
 
     /* ---- Saturation-restoring color matrix (Q8, rows sum to 256) --------- */
     int ccm[3][3];
