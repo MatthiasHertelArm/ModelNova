@@ -63,6 +63,13 @@ extern ARM_DRIVER_CPI Driver_CPI;
 #define CAM_AE_TARGET     ((uint32_t)CAMERA_AE_TARGET)
 #define CAM_AE_EXP_MAX    1900U     /* lines; sensor VTS is 2000           */
 #define CAM_AE_EXP_MIN    8U        /* lines                               */
+/* Anti-flicker: one 100 Hz mains half-period in sensor lines (HTS 750 at
+   90 MHz sensor clock = 8.33 us per line -> 10 ms = 1200 lines). Holding
+   the exposure at exactly this value makes mains flicker integrate to a
+   constant and averages out PWM-dimmed LED lamps; analog gain does the
+   brightness fine-tuning instead. VTS (2000) has room for only this one
+   flicker quantum. */
+#define CAM_AE_FLICKER_LINES 1200U
 #define CAM_AE_GAIN_MIN   0x10000U  /* 1x, Q16.16                          */
 #define CAM_AE_GAIN_MAX   0xF8000U  /* 15.5x, Q16.16 (sensor max is 15.9x) */
 
@@ -96,9 +103,15 @@ static void CameraAEUpdate (uint32_t mean_linear) {
   }
 
   /* Scale the total exposure, then split: exposure time first, analog
-     gain for the remainder */
+     gain for the remainder. Whenever the scene needs at least one flicker
+     period of exposure, pin the exposure to exactly that period and put
+     the remainder into gain - arbitrary exposure times beat against
+     flickering artificial light and produce rolling bands. */
   uint64_t total = ((uint64_t)exp_lines * gain_q16 * ratio_q8) >> 8;
   uint64_t lines = total / CAM_AE_GAIN_MIN;
+  if (lines >= CAM_AE_FLICKER_LINES) {
+    lines = CAM_AE_FLICKER_LINES;
+  }
   if (lines > CAM_AE_EXP_MAX) {
     lines = CAM_AE_EXP_MAX;
   }
