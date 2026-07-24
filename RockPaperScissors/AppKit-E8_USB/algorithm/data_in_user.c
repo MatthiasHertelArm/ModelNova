@@ -30,6 +30,7 @@
 #include "algorithm_config.h"
 #include "app_setup.h"
 #include "image_processing_func.h"
+#include "soft_isp.h"
 
 #ifdef   USE_SEGGER_SYSVIEW
 #include "SEGGER_SYSVIEW.h"
@@ -304,14 +305,24 @@ int32_t GetInputData (uint8_t *buf, uint32_t max_len) {
                    (bayer_pattern_t)CAMERA_FRAME_BAYER);
   /* Raw sensor data has a black-level pedestal, no white balance (Bayer
      green dominates), desaturated colors and radial red lens shading;
-     apply the corrections a camera ISP would normally do, and feed the
-     measured brightness into the sensor exposure loop */
+     run the software ISP, and feed the measured (center-weighted) scene
+     brightness into the sensor exposure loop */
   {
-    static const uint16_t lsc_r_q8[] = CAMERA_LSC_R_GAIN_Q8;
-    int mean = image_gray_world_wb_gamma(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT,
-                                         CAMERA_BLACK_LEVEL, CAMERA_SATURATION_Q8,
-                                         lsc_r_q8, (int)(sizeof(lsc_r_q8) / sizeof(lsc_r_q8[0])));
-    CameraAEUpdate((uint32_t)mean);
+    static const uint16_t   lsc_r_q8[] = CAMERA_LSC_R_GAIN_Q8;
+    static const SoftISP_Config isp_cfg = {
+      .black_level         = CAMERA_BLACK_LEVEL,
+      .saturation_q8       = CAMERA_SATURATION_Q8,
+      .lsc_r_q8            = lsc_r_q8,
+      .lsc_r_len           = (int)(sizeof(lsc_r_q8) / sizeof(lsc_r_q8[0])),
+      .ae_target           = CAMERA_AE_TARGET,
+      .ae_center_weight_q8 = CAMERA_AE_CENTER_WEIGHT_Q8,
+      .awb_min_gray_pct    = CAMERA_AWB_MIN_GRAY_PCT,
+      .sharpen_q8          = CAMERA_SHARPEN_Q8,
+    };
+    SoftISP_Status isp_st;
+
+    SoftISP_Process(buf, ML_IMAGE_WIDTH, ML_IMAGE_HEIGHT, &isp_cfg, &isp_st);
+    CameraAEUpdate(isp_st.mean_linear);
   }
 #elif (CAMERA_FRAME_TYPE == CAMERA_FRAME_TYPE_RGB888)
   crop_resize_rgb888_to_rgb888(inFrame,

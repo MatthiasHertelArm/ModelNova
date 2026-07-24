@@ -53,6 +53,8 @@ project:
         - file: algorithm_config.h
         - file: algorithm_user.cpp
         - file: data_in_user.c
+        - file: soft_isp.c
+        - file: soft_isp.h
         - file: arm_memory_allocator.h
         - file: arm_memory_allocator.cc
         - file: arm_executor_runner.cc

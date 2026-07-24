@@ -93,6 +93,38 @@
 #define CAMERA_SATURATION_Q8        410
 #endif
 
+//  <o>Auto Exposure Target
+//  <i> Linear (pre-gamma) frame mean the exposure control aims for.
+//  <i> Default: 120
+#ifndef CAMERA_AE_TARGET
+#define CAMERA_AE_TARGET            120
+#endif
+
+//  <o>Auto Exposure Center Weight (Q8)
+//  <i> Extra metering weight of the center half-box relative to the full
+//  <i> frame (0 = plain average, 512 = the center counts 3x). Keeps the
+//  <i> central subject exposed against bright backgrounds.
+//  <i> Default: 512
+#ifndef CAMERA_AE_CENTER_WEIGHT_Q8
+#define CAMERA_AE_CENTER_WEIGHT_Q8  512
+#endif
+
+//  <o>AWB Minimum Gray Percentage
+//  <i> Freeze white balance adaptation when fewer than this percentage of
+//  <i> valid pixels are near-gray under the current gains (the gray-world
+//  <i> assumption is untrustworthy for strongly colored scenes).
+//  <i> Default: 4
+#ifndef CAMERA_AWB_MIN_GRAY_PCT
+#define CAMERA_AWB_MIN_GRAY_PCT     4
+#endif
+
+//  <o>Sharpen Strength (Q8)
+//  <i> Post-gamma unsharp mask strength (0 = off, 64 = 0.25).
+//  <i> Default: 64
+#ifndef CAMERA_SHARPEN_Q8
+#define CAMERA_SHARPEN_Q8           64
+#endif
+
 //  <s>Frame Buffer Section Name
 //  <i> Define the name of the camera frame buffer section.
 //  <i> Default: ".bss.camera_frame_buf"
