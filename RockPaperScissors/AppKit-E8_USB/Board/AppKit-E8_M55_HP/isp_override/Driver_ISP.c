@@ -221,6 +221,11 @@ static ARM_ISP_CAPABILITIES ISP_GetCapabilities(void)
  * param[in] isp Pointer to ISP resource.
  * return    @ref execution_status.
  */
+/* Bring-up diagnostics: step return codes readable via the debugger.
+   Values: 0 = step not reached, 1000 = OK, 1000+e = VSI error e. */
+volatile int32_t isp_diag[24] __attribute__((used));
+#define ISP_DIAG(i, v) (isp_diag[i] = 1000 + (int32_t)(v))
+
 static int32_t ISP_Init(ARM_ISP_SignalEvent_t cb_event, CAMERA_SENSOR_DEVICE *cam_sensor,
                         ISP_RESOURCES *isp)
 {
@@ -244,6 +249,7 @@ static int32_t ISP_Init(ARM_ISP_SignalEvent_t cb_event, CAMERA_SENSOR_DEVICE *ca
 
     /* Init ISP system. */
     ret           = VSI_MPI_ISP_Init(isp->isp_dev_id);
+    ISP_DIAG(0, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }
@@ -251,6 +257,7 @@ static int32_t ISP_Init(ARM_ISP_SignalEvent_t cb_event, CAMERA_SENSOR_DEVICE *ca
     /* Configure ISP work-mode. */
     devAttr.ispWorkMode = WORK_MODE_NORMAL;
     ret                 = VSI_MPI_ISP_SetDevAttr(isp->isp_dev_id, &devAttr);
+    ISP_DIAG(1, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }
@@ -295,6 +302,7 @@ static int32_t ISP_Init(ARM_ISP_SignalEvent_t cb_event, CAMERA_SENSOR_DEVICE *ca
     }
 
     ret = VSI_MPI_ISP_GetPortAttr(isp->isp_port_id, &isp_port_config);
+    ISP_DIAG(2, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }
@@ -355,6 +363,7 @@ static int32_t ISP_Init(ARM_ISP_SignalEvent_t cb_event, CAMERA_SENSOR_DEVICE *ca
     isp_port_config.snsFps             = 0;
 
     ret = VSI_MPI_ISP_SetPortAttr(isp->isp_port_id, &isp_port_config);
+    ISP_DIAG(3, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }
@@ -376,14 +385,28 @@ static int32_t ISP_Init(ARM_ISP_SignalEvent_t cb_event, CAMERA_SENSOR_DEVICE *ca
     isp->isp_calib_info->modules.wbm.measRect.vSize = isp->isp_port_attr->outFormRect.height;
 
     ret = VSI_MPI_ISP_SetCalib(isp->isp_port_id, isp->isp_calib_info);
+    ISP_DIAG(4, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }
 
     // Set-up ISP channel attributes which control the way ISP output data to memory.
     ret = VSI_MPI_ISP_SetChnAttr(isp->isp_chn_id, isp->isp_chan_attr);
+    ISP_DIAG(5, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
+    }
+
+    /* Read back what the library actually holds for the channel */
+    {
+        ISP_CHN_ATTR_S rb;
+        memset(&rb, 0, sizeof(rb));
+        ISP_DIAG(6, VSI_MPI_ISP_GetChnAttr(isp->isp_chn_id, &rb) - 0); /* 1000=OK */
+        isp_diag[7]  = (int32_t)rb.chnFormat.width;
+        isp_diag[8]  = (int32_t)rb.chnFormat.height;
+        isp_diag[9]  = (int32_t)rb.chnFormat.pixelFormat;
+        isp_diag[12] = (int32_t)isp->isp_chan_attr->chnFormat.width;
+        isp_diag[13] = (int32_t)isp->isp_chan_attr->chnFormat.pixelFormat;
     }
 
     isp->state.initialized = 1;
@@ -506,16 +529,19 @@ static int32_t ISP_start(ISP_RESOURCES *isp)
     // Library call to start capture using ISP library
 
     ret = VSI_MPI_ISP_EnableDev(isp->isp_dev_id);
+    ISP_DIAG(16, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }
 
     ret = VSI_MPI_ISP_EnableChn(isp->isp_chn_id);
+    ISP_DIAG(17, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }
 
     ret = VSI_MPI_ISP_EnablePort(isp->isp_port_id);
+    ISP_DIAG(18, ret);
     if (ret) {
         return ARM_DRIVER_ERROR;
     }

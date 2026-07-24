@@ -47,7 +47,7 @@
 //     <1=> enable
 // <i> Defines CPI ISP port
 // <i> Default: ISP port disable
-#define RTE_CPI_ISP_PORT                                      0
+#define RTE_CPI_ISP_PORT                                      1
 
 // <o> CPI Row roundup
 //     <0=> disable
@@ -371,7 +371,7 @@
 
 // <e> ISP (ISP) [Driver_ISP]
 // <i> Configuration settings for Driver_ISP in component ::Drivers:ISP
-#define RTE_ISP 1
+#define RTE_ISP 0
 #if RTE_ISP
 
 // <o> ISP IRQ priority <0-255>
@@ -510,15 +510,15 @@
 //    <41=> RAW422SP (RAW422 semi-planar)
 // <i> Defines ISP output pixel format for memory dump
 // <i> Default: RGB888
-#define RTE_ISP_OUTPUT_FORMAT 38
+#define RTE_ISP_OUTPUT_FORMAT 32
 
 // <o> ISP Scaler Output Width
 // <i> Width in pixels of the ISP scaler output (after scaling from sensor dimensions).
-#define RTE_ISP_OUTPUT_WIDTH        480
+#define RTE_ISP_OUTPUT_WIDTH        512
 
 // <o> ISP Scaler Output Height
 // <i> Height in pixels of the ISP scaler output (after scaling from sensor dimensions).
-#define RTE_ISP_OUTPUT_HEIGHT       480
+#define RTE_ISP_OUTPUT_HEIGHT       512
 
 // <o> ISP Sensor Input Width
 // <i> Width in pixels of the sensor input to the ISP pipeline.
@@ -1268,7 +1268,7 @@
 // <i> Default: 0
 // <i> 0 is the configuration verified with the ISP; the ISP scaler
 // <i> downscales 1296x972 to the 640x480 output (same 4:3 aspect).
-#define RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG            0
+#define RTE_OV5675_CAMERA_SENSOR_IMAGE_CONFIG            3
 
 // <i> OV5675 frame height (derived from IMAGE_CONFIG)
 // <i> defines OV5675 frame height.

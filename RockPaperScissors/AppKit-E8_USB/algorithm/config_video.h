@@ -30,7 +30,7 @@
 //  <i> it to this size.
 //  <i> Default: 480
 #ifndef CAMERA_FRAME_WIDTH
-#define CAMERA_FRAME_WIDTH          480
+#define CAMERA_FRAME_WIDTH          640
 #endif
 
 //  <o>Camera Frame Height
@@ -47,7 +47,7 @@
 //  <i> is enabled (RTE_CPI_ISP_PORT).
 //  <i> Default: 0
 #ifndef CAMERA_FRAME_TYPE
-#define CAMERA_FRAME_TYPE           2
+#define CAMERA_FRAME_TYPE           0
 #endif
 
 //  <o>Frame Bayer Pattern <0=>RGGB <1=>BGGR <2=>GRBG <3=>GBRG

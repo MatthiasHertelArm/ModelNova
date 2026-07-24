@@ -91,8 +91,11 @@ static void DriverCPI_Callback(uint32_t cb_event)
     event = 0U;
 
 #if defined(RTE_ISP) && (RTE_ISP == 1) && (RTE_CPI_ISP_PORT == 1)
-    if (cb_event & ARM_ISP_MI_EVENT_MP_FRAME_END_DETECTED) {
-        /* ISP memory interface finished writing a processed frame */
+    if (cb_event & ARM_CPI_EVENT_CAMERA_CAPTURE_STOPPED) {
+        /* CPI finished the frame DMA. On this device the ISP has no memory
+           interface of its own - its processed output streams back through
+           the CPI port and the CPI writes it to memory, so capture-stopped
+           IS the frame completion. */
         hVideoIn.active    = 0U;
 
         /* Frame-end processing (AE update, buffer recycle) is deferred to
@@ -111,11 +114,6 @@ static void DriverCPI_Callback(uint32_t cb_event)
             /* Buffer is full */
             hVideoIn.flags |= FLAGS_BUF_FULL;
         }
-    }
-
-    if (cb_event & ARM_CPI_EVENT_CAMERA_CAPTURE_STOPPED) {
-        /* CPI input capture finished; frame completion is signalled by the
-           ISP MI frame-end event above */
     }
 #else
     if (cb_event & ARM_CPI_EVENT_CAMERA_CAPTURE_STOPPED) {
@@ -223,6 +221,19 @@ static int32_t Initialize(vStreamEvent_t event_cb)
             if (status != ARM_DRIVER_OK) {
                 rval = VSTREAM_ERROR;
             }
+
+#if defined(RTE_ISP) && (RTE_ISP == 1) && (RTE_CPI_ISP_PORT == 1)
+            /* Driver_CPI programs the capture frame geometry from the SENSOR
+               dimensions, but with the ISP port enabled the CPI captures the
+               ISP OUTPUT stream (verified on target: the ISP MI registers
+               stay unprogrammed; the CPI DMA is the only memory writer).
+               Without this fix the CPI captures sensor-frame-sized data and
+               overruns the frame buffer. Reprogram the frame config to the
+               ISP output geometry. */
+            /* CAM_VIDEO_FCFG: data[13:0] = data items per row, row[27:16] = rows - 1 */
+            CPI->CAM_VIDEO_FCFG = ((uint32_t)(RTE_ISP_OUTPUT_HEIGHT - 1U) << 16) |
+                                  ((uint32_t)RTE_ISP_OUTPUT_WIDTH);
+#endif
 
             /* Set configuration */
             cfg = ARM_CPI_EVENT_CAMERA_CAPTURE_STOPPED | ARM_CPI_EVENT_CAMERA_FRAME_VSYNC_DETECTED |
